@@ -160,7 +160,7 @@ export default function CloudGamepadScreen() {
                 {option.isAddButton ? (
                   <>
                     <MaterialCommunityIcons name="plus" size={64} color={colors.accent} />
-                    <Text style={styles.cardTitle}>ADD WEBSITE</Text>
+                    <Text style={[styles.cardTitle, { fontSize: 12 }]}>ADD WEBSITE</Text>
                   </>
                 ) : (
                   <>
@@ -181,9 +181,33 @@ export default function CloudGamepadScreen() {
           ))}
         </View>
 
+        <Text style={[styles.footerNote]}>
+          This app{' '}
+          <Text
+            style={{
+              // color: '#ffff00',
+              color: '#ffffff',
+            }}
+          >
+            does not
+          </Text>{' '}
+          collect any user data, keystrokes, passwords or any other personal information
+          from the websites you add and use.
+        </Text>
         <Text style={styles.footerNote}>
-          Note: This feature is designed to support most websites that also support a
-          physical gamepad, but individual website performance & compatibility may vary.
+          {/* Most websites that need a physical gamepad are supported, but individual website{' '} */}
+          {/* <Text style={{ color: '#ffffff' }}>
+            performance & compatibility may vary.
+          </Text> */}
+          <Text
+            style={
+              {
+                // color: '#ffffff'
+              }
+            }
+          >
+            Performance & compatibility may vary between websites.
+          </Text>
         </Text>
       </ScrollView>
 
@@ -236,14 +260,16 @@ const styles = StyleSheet.create({
   },
   card: {
     aspectRatio: 1,
-    backgroundColor: '#1d2831',
+    // backgroundColor: '#1d2831',
     borderColor: '#8d8995',
+    backgroundColor: colors.background,
     borderRadius: 34,
     borderWidth: 1.5,
-    padding: 22,
+    // padding: 22,
+    // boxShadow: '2px 4px 12px #00000014',
   },
   cardPressed: {
-    backgroundColor: '#22313b',
+    // backgroundColor: '#22313b',
     borderColor: colors.accent,
     opacity: 0.9,
     transform: [{ scale: 0.99 }],
@@ -267,23 +293,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '600',
+    color: colors.accent,
+    fontSize: 14,
+    // fontWeight: '600',
     letterSpacing: 0,
     textAlign: 'center',
   },
   cardDescription: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '400',
+    color: colors.text,
+    fontSize: 10,
+    // fontWeight: '400',
     lineHeight: 18,
     textAlign: 'center',
   },
   footerNote: {
     color: colors.text,
     opacity: 0.6,
-    fontSize: 13,
+    fontSize: 9,
     textAlign: 'center',
     marginTop: 'auto',
     lineHeight: 18,

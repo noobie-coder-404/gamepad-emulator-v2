@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo, useState } from 'react';
 
 export const APP_MODES = {
   CLOUD_GAMING: 'cloud gaming',
-  PC_GAMEPAD: 'pc gamepad',
 };
 
 const ModeContext = createContext(null);

@@ -20,34 +20,52 @@ const MODAL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.9, 800);
 // 🚨 Replace these with the actual filenames from your "onboarding illustrations" folder
 const ILLUSTRATIONS = [
   {
-    id: '1',
+    id: 1,
     type: 'image',
-    title: 'Hold your phone in the following position',
-    source: require('@/assets/onboarding-illustrations/1-position.png'),
+    title: 'Show Gamepad',
+    source: require('@/assets/onboarding-illustrations/1-reveal-gamepad.png'),
   },
   {
-    id: '2',
+    id: 2,
     type: 'image',
-    title: 'LT and LB',
-    source: require('@/assets/onboarding-illustrations/2-left-index.jpeg'),
+    title: 'Hide Gamepad',
+    source: require('@/assets/onboarding-illustrations/2-hide-gamepad.png'),
   },
   {
     id: '3',
     type: 'image',
-    title: 'RT and RB',
-    source: require('@/assets/onboarding-illustrations/3-right-index.jpeg'),
+    title: 'Hold your phone in the following position',
+    source: require('@/assets/onboarding-illustrations/3-position.png'),
   },
   {
     id: '4',
-    type: 'video',
-    title: 'Using the D-Pad',
-    source: require('@/assets/onboarding-illustrations/4-dpad.mp4'),
+    type: 'image',
+    title: 'LT and LB',
+    source: require('@/assets/onboarding-illustrations/4-left-index.png'),
   },
   {
     id: '5',
+    type: 'image',
+    title: 'RT and RB',
+    source: require('@/assets/onboarding-illustrations/5-right-index.png'),
+  },
+  {
+    id: '6',
+    type: 'image',
+    title: 'Swipe to Look',
+    source: require('@/assets/onboarding-illustrations/6-swipe-to-look.png'),
+  },
+  {
+    id: '7',
+    type: 'video',
+    title: 'Using the D-Pad',
+    source: require('@/assets/onboarding-illustrations/7-abxy.mp4'),
+  },
+  {
+    id: '8',
     type: 'video',
     title: 'Using ABXY Buttons',
-    source: require('@/assets/onboarding-illustrations/5-abxy.mp4'),
+    source: require('@/assets/onboarding-illustrations/8-dpad.mp4'),
   },
 ];
 
@@ -187,7 +205,7 @@ export default function OnboardingModal({ visible, onClose }) {
             </View>
             <Pressable style={styles.nextBtn} onPress={handleNext}>
               <Text style={styles.nextBtnText}>
-                {currentIndex === ILLUSTRATIONS.length - 1 ? 'Finish' : 'Next'}
+                {currentIndex === ILLUSTRATIONS.length - 1 ? 'FINISH' : 'NEXT'}
               </Text>
             </Pressable>
           </View>
@@ -215,8 +233,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(141, 137, 149, 0.3)',
+    // borderBottomWidth: 1,
+    // borderBottomColor: 'rgba(141, 137, 149, 0.3)',
   },
   closeBtn: {
     position: 'absolute',
@@ -244,17 +262,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(141, 137, 149, 0.3)',
+    // borderTopWidth: 1,
+    // borderTopColor: 'rgba(141, 137, 149, 0.3)',
   },
   pagination: { flexDirection: 'row', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.2)' },
-  dotActive: { backgroundColor: '#ff8c00', width: 20 },
+  dotActive: { backgroundColor: colors.accent, width: 20 },
   nextBtn: {
-    backgroundColor: '#ff8c00',
+    backgroundColor: colors.accent,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 12,
   },
-  nextBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  nextBtnText: { color: colors.background, fontSize: 14, fontWeight: 'bold' },
 });

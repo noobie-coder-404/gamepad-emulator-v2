@@ -13,7 +13,7 @@ import { Gugi_400Regular, useFonts } from '@expo-google-fonts/gugi';
 import { Orbitron_900Black } from '@expo-google-fonts/orbitron';
 
 import colors from '@/assets/images/colors';
-import { APP_MODES, useMode } from '@/context/ModeContext';
+import { useMode } from '@/context/ModeContext';
 
 //todo - make facepad and dpad buttons floating too, for better eyes-free usage
 
@@ -31,13 +31,12 @@ export default function Buttons({
     Orbitron: Orbitron_900Black,
   });
 
-  const isPcGamepad = mode === APP_MODES.PC_GAMEPAD;
   // Controls the main background color of the button when it is actively pressed
   // Controls the glowing box-shadow color around the button when it is actively pressed
-  const activeOptionColor = isPcGamepad ? colors.pcGamepadActive : '#979ca2a7';
-  const activeOptionColorSecondary = isPcGamepad ? colors.pcGamepadActive : '#979ca2a7';
+  const activeOptionColor = colors.clusterAnchor;
+  const activeOptionColorSecondary = colors.clusterHighlight;
 
-  const iconColor = isPcGamepad ? 'black' : '#444444';
+  const iconColor = colors.cloudGamepadText;
   const dynamicTextStyle = [styles.buttonText, { color: iconColor }];
 
   let clusterButtons;
@@ -197,7 +196,7 @@ export default function Buttons({
       //     : direction === buttonDirection[activeButton]
       //       ? '#ffffff'
       //       : '#cfcfcf',
-      backgroundColor: isPcGamepad ? '#c1c7ce' : 'rgba(194, 194, 194, 0.82)',
+      backgroundColor: colors.cloudGamepadBase,
 
       opacity:
         // direction === buttonDirection[activeButton] || !activeButton ? 1 : 0,
@@ -290,8 +289,7 @@ export default function Buttons({
     };
   });
   const centerBallStyles = useAnimatedStyle(() => {
-    if (isClusterActive.value)
-      return { backgroundColor: isPcGamepad ? activeOptionColor : '#979ca2' };
+    if (isClusterActive.value) return { backgroundColor: colors.clusterCenter };
     else return { backgroundColor: '#ffffff00' };
   });
 
@@ -333,10 +331,10 @@ export default function Buttons({
           {
             zIndex: 5,
             position: 'absolute',
-            backgroundColor: isPcGamepad ? '#4a4a4a' : 'rgba(194, 194, 194, 0.82)',
+            backgroundColor: colors.cloudGamepadBase,
             borderWidth: 6,
             // Controls the border color of the unexpanded facepad/ABXY center button (idle state)
-            borderColor: isPcGamepad ? colors.pcGamepadBorder : '#ffffff00',
+            borderColor: '#ffffff00',
             // borderColor: '#4178e4',
           },
         ]}
@@ -417,7 +415,6 @@ const styles = StyleSheet.create({
     // display: "flex",
     // backgroundColor: "white",
     textAlign: 'center',
-    color: '#212121',
     fontWeight: 'bold',
     // fontStyle: 'helvetica',
     fontSize: 15,
@@ -426,7 +423,6 @@ const styles = StyleSheet.create({
   borderContainer: {
     padding: 2,
     borderWidth: 3,
-    borderColor: '#212121af',
     borderRadius: 999,
     width: 42,
     height: 42,

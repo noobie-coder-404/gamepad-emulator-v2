@@ -1,23 +1,22 @@
 import colors from '@/assets/images/colors';
-import L3Icon from '@/assets/images/l3.svg';
-import R3Icon from '@/assets/images/r3.svg';
 import Buttons from '@/components/Buttons';
 import Joystick from '@/components/Joystick';
 import OnboardingModal from '@/components/OnboardingModal';
 import Trigger from '@/components/Trigger';
-import { TurnkeyBackground } from '@/components/TurnkeyBackground';
-import { APP_MODES, useMode } from '@/context/ModeContext';
+import { useMode } from '@/context/ModeContext';
 import { calculateOffset } from '@/helper-functions/calculateOffset';
 import { initialiseGamepad } from '@/helper-functions/gamepadInterface';
 import { isInside } from '@/helper-functions/isInside';
+import { PWA_CLEAN_SPOOF } from '@/helper-functions/spoof';
 import { useOneEuroFilter } from '@/hooks/useOneEuroFilter';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { setStatusBarHidden } from 'expo-status-bar';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -32,7 +31,6 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
-import dgram from 'react-native-nitro-dgram';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -45,6 +43,8 @@ import Animated, {
 import { WebView } from 'react-native-webview';
 
 console.log(colors);
+const isTouchVisible = true;
+const handColor = '#a5a5a5';
 
 const facepadValues = {
   a: 1,
@@ -61,10 +61,11 @@ const dPadValues = {
   null: 0,
 };
 
-// const PC_IP = '192.168.1.3'; // YOUR PC IP
-// const PC_IP = ' 10.32.193.131';
-
-const PORT = 5005;
+const GAIN_PROFILES = {
+  normal: 1,
+  fps: 1.5,
+  pro: 2,
+};
 
 const noOfSteps = 65534; //if you change this, then also change it in the receiver
 const triggerDirectionUpwards = true;
@@ -73,6 +74,45 @@ const continuousMode = false; // trigger and button can be controlled without li
 const triggerLength = 70;
 const MENU_BUTTON_SIZE = 36;
 
+// Temporary component to display touches for video recording
+const TouchCursor = ({ index, debugTouches }) => {
+  const style = useAnimatedStyle(() => {
+    const touch = debugTouches.value[index];
+    if (!touch) {
+      return { opacity: 0, transform: [{ translateX: -100 }, { translateY: -100 }] };
+    }
+    return {
+      opacity: 1,
+      transform: [
+        { translateX: touch.x - 42 }, // Center the icon horizontally on the touch point
+        { translateY: touch.y - 5 }, // Shift up so the solid fingertip aligns with the touch point
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          zIndex: 99999,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        style,
+      ]}
+    >
+      <MaterialCommunityIcons
+        name="hand-pointing-up"
+        size={84}
+        color={handColor}
+        style={{ transform: [{ scaleX: -1 }] }}
+      />
+    </Animated.View>
+  );
+};
+
 export default function Index() {
   // send event based snapshots -
   // send the snapshot upon change as it is detected
@@ -80,38 +120,10 @@ export default function Index() {
   // frequency of nonevent snapshot should be enough to not cause bufferbloat or clog the js thread
   // caveats - letting go of stick and it springs back to center - need to send movement packets for it coming back towards the center, maybe even overshooting
 
-  const { ip, code, url, phoneSessionId } = useLocalSearchParams();
+  const { url } = useLocalSearchParams();
   const router = useRouter();
 
-  // Hardcoded fallback for iOS Simulator testing
-  // 🚨 CHANGE THIS TO MATCH THE TRUE IP PRINTED BY qrGenerator.js! 🚨
-  const IOS_SIMULATOR_IP = '192.168.1.7';
-  const IOS_SIMULATOR_CODE = '12345';
-
-  const PC_IP =
-    Platform.OS === 'ios' && !ip ? IOS_SIMULATOR_IP : Array.isArray(ip) ? ip[0] : ip;
-  const headerCode =
-    Platform.OS === 'ios' && !code
-      ? IOS_SIMULATOR_CODE
-      : Array.isArray(code)
-        ? code[0]
-        : code;
-  const numericHeaderCode = Number.isFinite(Number(headerCode)) ? Number(headerCode) : 0;
-
-  const numericPhoneSessionId = useMemo(() => {
-    if (phoneSessionId) {
-      const val = Array.isArray(phoneSessionId) ? phoneSessionId[0] : phoneSessionId;
-      if (Number.isFinite(Number(val))) return Number(val);
-    }
-    // Fallback if accessed via older saved connection that doesn't have an ID
-    return Platform.OS === 'ios' && !ip
-      ? 54321
-      : Math.floor(Math.random() * (65534 - 10000 + 1)) + 10000;
-  }, [phoneSessionId, ip]);
-
   const websiteUrl = Array.isArray(url) ? url[0] : url;
-  console.log('IP of pc is: ', PC_IP);
-  console.log('Code header is: ', headerCode);
 
   const { width, height } = useWindowDimensions();
   const { mode, setMode } = useMode();
@@ -120,41 +132,17 @@ export default function Index() {
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [trackpadMode, setTrackpadMode] = useState(true);
   const trackpadModeSV = useSharedValue(true);
-  const [gain, setGain] = useState(2.0);
-  const gainSV = useSharedValue(2.0);
-
-  const udpSocketRef = useRef(null);
+  const [gain, setGain] = useState(1.5);
+  const gainSV = useSharedValue(1.5);
+  const [sensitivity, setSensitivity] = useState(10);
+  const sensitivitySV = useSharedValue(10);
 
   useEffect(() => {
-    udpSocketRef.current = dgram.createSocket('udp4');
-    return () => {
-      if (udpSocketRef.current) {
-        udpSocketRef.current.close();
-        udpSocketRef.current = null;
-      }
-    };
-  }, []);
-
-  const sendJsiPacket = useCallback((arr, ip, port) => {
-    if (!udpSocketRef.current) return;
-    try {
-      const buffer = new Uint8Array(arr.length * 2);
-      for (let i = 0; i < arr.length; i++) {
-        let val = Math.round(arr[i]);
-        if (val < 0) val = 0;
-        if (val > 65535) val = 65535;
-        buffer[i * 2] = (val >> 8) & 0xff; // High byte (Big Endian)
-        buffer[i * 2 + 1] = val & 0xff; // Low byte
-      }
-      udpSocketRef.current.send(buffer, 0, buffer.length, port, ip);
-    } catch (err) {
-      console.error('UDP Send Error:', err);
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden'); // hide navbar on android
+      // 'overlay-swipe' enables true Immersive Mode, required to hide the Android 12L+ taskbar
+      NavigationBar.setBehaviorAsync('overlay-swipe');
     }
-  }, []);
-
-  useEffect(() => {
-    NavigationBar.setVisibilityAsync('hidden'); // hide navbar on android
-    setStatusBarHidden(true, 'fade');
     // 1. Load settings when gamepad opens
     const loadSettings = async () => {
       try {
@@ -170,6 +158,12 @@ export default function Index() {
           setGain(val);
           gainSV.value = val;
         }
+        const savedSensitivity = await AsyncStorage.getItem('trackpadSensitivity');
+        if (savedSensitivity !== null) {
+          const val = JSON.parse(savedSensitivity);
+          setSensitivity(val);
+          sensitivitySV.value = val;
+        }
       } catch (error) {
         console.error('Failed to load settings', error);
       }
@@ -179,28 +173,30 @@ export default function Index() {
     // 2. Save settings when gamepad closes (minimally invasive)
     return () => {
       if (Platform.OS === 'android') {
+        NavigationBar.setBehaviorAsync('inset-touch');
         NavigationBar.setVisibilityAsync('visible');
       }
       AsyncStorage.setItem('trackpadMode', JSON.stringify(trackpadModeSV.value)).catch(
         console.error
       );
       AsyncStorage.setItem('gain', JSON.stringify(gainSV.value)).catch(console.error);
+      AsyncStorage.setItem(
+        'trackpadSensitivity',
+        JSON.stringify(sensitivitySV.value)
+      ).catch(console.error);
     };
   }, []);
 
-  const isPcGamepad = mode === APP_MODES.PC_GAMEPAD;
   const BOUNDARY = 10;
-  const CLOSED_WIDTH = 62;
-  const EXPANDED_WIDTH = isPcGamepad ? 176 : 290;
+  const CLOSED_WIDTH = 119;
+  const EXPANDED_WIDTH = 290;
   const MENU_HEIGHT = 50;
 
-  const menuX = useSharedValue(
-    width / 2 - (isPcGamepad ? EXPANDED_WIDTH : CLOSED_WIDTH) / 2
-  );
+  const menuX = useSharedValue(width / 2 - CLOSED_WIDTH / 2);
   const menuY = useSharedValue(BOUNDARY);
-  const menuWidth = useSharedValue(isPcGamepad ? EXPANDED_WIDTH : CLOSED_WIDTH);
+  const menuWidth = useSharedValue(CLOSED_WIDTH);
   const isFirstLandscape = useRef(true);
-  const isMenuExpanded = useSharedValue(isPcGamepad);
+  const isMenuExpanded = useSharedValue(false);
 
   const initialMeasurements = {
     pageX: 0,
@@ -327,6 +323,10 @@ export default function Index() {
   const currentTrackpadInfo = useSharedValue(null);
   // const velocityCap = 0.16; // for tanh
   const velocityCap = 0.2; // for pade
+  // const baseVelocityCap = 0.16; // for tanh
+  const baseVelocityCap = 0.2; // for pade
+  const sensitivityRange = 0.1;
+  const sensitivityMax = 20;
   const initialFrequency = undefined; //initial frequency (Hz), gets overwritten after first sample ( can use for fallback )
   const minCutoff = 0.5; //default 1.0 -- 0.1 means heavy smoothing at low speeds
   const beta = 0.007; //default 0.1  -- 0 means fast swipes are not changed at all
@@ -346,6 +346,9 @@ export default function Index() {
   const minDuration = useSharedValue(0);
   // const maxChangesPerSecond = useSharedValue(0);
   const noOfPackets = useSharedValue(0);
+
+  // Array to hold active touch coordinates for the tutorial overlay
+  const debugTouches = useSharedValue([]);
 
   const clampTriggerPull = (value) => {
     'worklet';
@@ -394,42 +397,16 @@ export default function Index() {
       isR3Active.value,
       selectButton.value,
       startButton.value,
-      numericHeaderCode,
-      numericPhoneSessionId,
     ];
   });
 
-  useEffect(() => {
-    if (!PC_IP) {
-      return;
-    }
-
-    // Send pairing burst every time the gamepad is opened
-    if (mode === APP_MODES.PC_GAMEPAD) {
-      const pairingPacket = Array(16).fill(numericHeaderCode);
-      pairingPacket[15] = numericPhoneSessionId;
-
-      sendJsiPacket(pairingPacket, PC_IP, PORT);
-      sendJsiPacket(pairingPacket, PC_IP, PORT);
-      sendJsiPacket(pairingPacket, PC_IP, PORT);
-      sendJsiPacket(pairingPacket, PC_IP, PORT);
-    }
-  }, [PC_IP, mode, numericHeaderCode, numericPhoneSessionId, sendJsiPacket]);
-
   const webViewRef = useRef(null);
 
-  const sendNativePacket = useCallback(
-    (arr) => {
-      if (mode === APP_MODES.PC_GAMEPAD) {
-        sendJsiPacket(arr, PC_IP, PORT);
-      } else if (mode === APP_MODES.CLOUD_GAMING) {
-        const jsCode = `window.uG(${JSON.stringify(arr)}); true;`;
-        // Inject it
-        webViewRef.current?.injectJavaScript(jsCode);
-      }
-    },
-    [mode, PC_IP, sendJsiPacket]
-  );
+  const sendNativePacket = useCallback((arr) => {
+    const jsCode = `window.uG(${JSON.stringify(arr)}); true;`;
+    // Inject it
+    webViewRef.current?.injectJavaScript(jsCode);
+  }, []);
 
   const isSame = useDerivedValue(() => {
     return previousSnapshot.value
@@ -480,8 +457,15 @@ export default function Index() {
 
   const manualGesture = Gesture.Manual()
     .onTouchesDown((e, manager) => {
+      // Update tutorial overlay points
+      debugTouches.value = e.allTouches.map((t) => ({
+        id: t.id,
+        x: t.absoluteX,
+        y: t.absoluteY,
+      }));
+
       manager.activate();
-      if (isMenuExpanded.value && !isPcGamepad) {
+      if (isMenuExpanded.value) {
         isMenuExpanded.value = false;
       }
       // start the timer
@@ -598,6 +582,13 @@ export default function Index() {
       });
     })
     .onTouchesMove((e, manager) => {
+      // Update tutorial overlay points
+      debugTouches.value = e.allTouches.map((t) => ({
+        id: t.id,
+        x: t.absoluteX,
+        y: t.absoluteY,
+      }));
+
       //todo- too many if else-if else statements - turn into switch
       e.allTouches.forEach((touch) => {
         if (touch.id === leftFinger.value) {
@@ -738,6 +729,8 @@ export default function Index() {
                 // console.log('effective: ', effectiveVx, effectiveVy);
                 // const currentVelocity = Math.hypot(currentVx, currentVy); //using raw values
                 const currentVelocity = Math.hypot(effectiveVx, effectiveVy); //using smoothened values
+
+                const velocityCap = baseVelocityCap - (sensitivitySV.value - 10) / 100;
                 // const joystickVelocity =
                 //   currentVelocity > velocityCap ? velocityCap : currentVelocity;
 
@@ -874,6 +867,16 @@ export default function Index() {
       }
     })
     .onTouchesUp((e, manager) => {
+      // Exclude the lifted touch to ensure the icon disappears immediately
+      const activeTouches = e.allTouches.filter(
+        (t) => !e.changedTouches.some((c) => c.id === t.id)
+      );
+      debugTouches.value = activeTouches.map((t) => ({
+        id: t.id,
+        x: t.absoluteX,
+        y: t.absoluteY,
+      }));
+
       // If a finger lifts, we figure out which one it was based on location
       // and reset that specific trigger
       e.changedTouches.forEach((touch) => {
@@ -1003,8 +1006,7 @@ export default function Index() {
           minDuration.value = 0;
           // 3) inside your worklet callback (onTouchesMove) when snapshot changed
           // const releasePacket = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255];
-          const releasePacket = Array(16).fill(65535);
-          releasePacket[15] = numericPhoneSessionId;
+          const releasePacket = Array(14).fill(65535);
           runOnJS(sendNativePacket)(releasePacket);
           runOnJS(sendNativePacket)(releasePacket);
           runOnJS(sendNativePacket)(releasePacket);
@@ -1014,6 +1016,17 @@ export default function Index() {
         }
         manager.end();
       }
+    })
+    .onTouchesCancelled((e, manager) => {
+      // Ensure the touch icon disappears if the system cancels the gesture
+      const activeTouches = e.allTouches.filter(
+        (t) => !e.changedTouches.some((c) => c.id === t.id)
+      );
+      debugTouches.value = activeTouches.map((t) => ({
+        id: t.id,
+        x: t.absoluteX,
+        y: t.absoluteY,
+      }));
     });
 
   const rightDisappearingJoystick = useAnimatedStyle(() => {
@@ -1075,17 +1088,15 @@ export default function Index() {
     }
   });
 
-  const isCloud = mode === APP_MODES.CLOUD_GAMING;
-  const iconColor = isCloud ? '#444444' : '#1C212A';
+  const iconColor = colors.cloudGamepadText;
 
-  const getStickButtonStyle = (
+  const getStickButtonOpacity = (
     buttonName,
     activeBtn,
     leftStickActive,
     rightStickActive
   ) => {
     'worklet';
-    const isActive = activeBtn === buttonName;
     let targetOpacity = 1;
 
     if (buttonName === 'leftL3' && activeBtn === 'rightL3') targetOpacity = 0;
@@ -1096,76 +1107,82 @@ export default function Index() {
     if (buttonName === 'leftR3' && rightStickActive === -1) targetOpacity = 0;
     if (buttonName === 'rightL3' && leftStickActive === -1) targetOpacity = 0;
 
-    const opacity = withTiming(targetOpacity, { duration: 150 });
-
-    if (isActive) {
-      return {
-        // Controls the main background color of the L3/R3 button when actively pressed
-        backgroundColor: withTiming(isCloud ? '#979ca2a7' : colors.pcGamepadL3R3Active, {
-          duration: 150,
-        }),
-        borderColor: withTiming('rgba(0,0,0,0)', { duration: 150 }),
-        borderWidth: withTiming(0, { duration: 150 }),
-        padding: withTiming(16, { duration: 150 }),
-        opacity,
-      };
-    } else {
-      return isCloud
-        ? {
-            backgroundColor: withTiming('#22283150', { duration: 150 }),
-            borderColor: withTiming('rgba(0,0,0,0)', { duration: 150 }),
-            borderWidth: withTiming(0, { duration: 150 }),
-            padding: withTiming(12, { duration: 150 }),
-            opacity,
-          }
-        : {
-            backgroundColor: withTiming('rgba(0,0,0,0)', { duration: 150 }),
-            borderColor: withTiming('rgba(0,0,0,0)', { duration: 150 }),
-            borderWidth: withTiming(8, { duration: 150 }),
-            padding: withTiming(1, { duration: 150 }),
-            opacity,
-          };
-    }
+    return {
+      opacity: withTiming(targetOpacity, { duration: 150 }),
+    };
   };
 
-  const leftL3Highlight = useAnimatedStyle(() =>
-    getStickButtonStyle(
+  const getStickButtonHighlight = (buttonName, activeBtn) => {
+    'worklet';
+    const isActive = activeBtn === buttonName;
+    const activeColor = '#979ca2a7';
+    const inactiveColor = '#979ca200';
+    const basePadding = 20; // 40 / 2
+    const activePadding = basePadding + 7;
+
+    return {
+      position: 'absolute',
+      borderRadius: 999,
+      backgroundColor: withTiming(isActive ? activeColor : inactiveColor, {
+        duration: 150,
+      }),
+      padding: withTiming(isActive ? activePadding : basePadding, { duration: 150 }),
+    };
+  };
+
+  const leftL3Opacity = useAnimatedStyle(() =>
+    getStickButtonOpacity(
       'leftL3',
       activeStickButton.value,
       leftJoystickFinger.value,
       rightJoystickFinger.value
     )
   );
-  const leftR3Highlight = useAnimatedStyle(() =>
-    getStickButtonStyle(
+  const leftL3Highlight = useAnimatedStyle(() =>
+    getStickButtonHighlight('leftL3', activeStickButton.value)
+  );
+
+  const leftR3Opacity = useAnimatedStyle(() =>
+    getStickButtonOpacity(
       'leftR3',
       activeStickButton.value,
       leftJoystickFinger.value,
       rightJoystickFinger.value
     )
   );
-  const rightR3Highlight = useAnimatedStyle(() =>
-    getStickButtonStyle(
+  const leftR3Highlight = useAnimatedStyle(() =>
+    getStickButtonHighlight('leftR3', activeStickButton.value)
+  );
+
+  const rightR3Opacity = useAnimatedStyle(() =>
+    getStickButtonOpacity(
       'rightR3',
       activeStickButton.value,
       leftJoystickFinger.value,
       rightJoystickFinger.value
     )
   );
-  const rightL3Highlight = useAnimatedStyle(() =>
-    getStickButtonStyle(
+  const rightR3Highlight = useAnimatedStyle(() =>
+    getStickButtonHighlight('rightR3', activeStickButton.value)
+  );
+
+  const rightL3Opacity = useAnimatedStyle(() =>
+    getStickButtonOpacity(
       'rightL3',
       activeStickButton.value,
       leftJoystickFinger.value,
       rightJoystickFinger.value
     )
   );
+  const rightL3Highlight = useAnimatedStyle(() =>
+    getStickButtonHighlight('rightL3', activeStickButton.value)
+  );
 
   // Shared style logic for Menu buttons (Select / Start)
   const getMenuButtonStyle = (isActive) => {
     'worklet';
-    const activeColor = isCloud ? '#979ca2a7' : colors.pcGamepadActive;
-    const inactiveColor = isCloud ? '#979ca200' : `${colors.pcGamepadActive}00`;
+    const activeColor = '#979ca2a7';
+    const inactiveColor = '#979ca200';
 
     // Dynamically scale the highlight ring based on the new MENU_BUTTON_SIZE constant
     const basePadding = MENU_BUTTON_SIZE / 2;
@@ -1189,48 +1206,72 @@ export default function Index() {
   );
 
   const gamepadTester = 'https://hardwaretester.com/gamepad';
-  const nvidia = 'https://play.geforcenow.com';
 
-  const [gamepadToggled, setGamepadToggled] = useState(mode === APP_MODES.PC_GAMEPAD);
-  const [uri, setUri] = useState(websiteUrl || nvidia);
-  // const [uri, setUri] = useState(gamepadTester);
+  const [gamepadToggled, setGamepadToggled] = useState(false);
+  const [uri, setUri] = useState(websiteUrl || gamepadTester);
+
+  // Temporary measure to clean gamepad-tester.net
+  const temporaryCleanScript =
+    uri && uri.includes('gamepad-tester.net')
+      ? `
+      var attempts = 0;
+      var cleanInterval = setInterval(function() {
+        var el = document.getElementsByClassName('block sm:w-92.5 min-[360px]:w-78 min-[400px]:w-84')[0];
+        if (el) {
+          document.body.innerHTML = '';
+          document.body.appendChild(el);
+          document.body.style.display = 'flex';
+          document.body.style.flexDirection = 'column';
+          document.body.style.justifyContent = 'flex-start';
+          document.body.style.paddingTop = '40px';
+          document.body.style.alignItems = 'center';
+          document.body.style.minHeight = '100vh';
+          el.style.transform = 'scale(0.6)';
+          el.style.transformOrigin = 'top center';
+          clearInterval(cleanInterval);
+        }
+        attempts++;
+        if (attempts > 20) clearInterval(cleanInterval);
+      }, 500);
+    `
+      : '';
 
   //apply only when platform is ios and website requires pwa (like nvidia)
-  const PWA_CLEAN_SPOOF = `
-(function() {
-  // 1. The PWA "Standalone" Flag
-  Object.defineProperty(navigator, 'standalone', {
-    get: () => true,
-    configurable: true
-  });
+  //   const PWA_CLEAN_SPOOF = `
+  // (function() {
+  //   // 1. The PWA "Standalone" Flag
+  //   Object.defineProperty(navigator, 'standalone', {
+  //     get: () => true,
+  //     configurable: true
+  //   });
 
-  // 2. The CSS Media Query Spoof
-  const originalMatchMedia = window.matchMedia;
-  window.matchMedia = function(query) {
-    if (query.includes('display-mode: standalone') || query.includes('display-mode: fullscreen')) {
-      return {
-        matches: true,
-        media: query,
-        onchange: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        addListener: () => {},
-        removeListener: () => {},
-        dispatchEvent: () => false,
-      };
-    }
-    return originalMatchMedia.call(window, query);
-  };
+  //   // 2. The CSS Media Query Spoof
+  //   const originalMatchMedia = window.matchMedia;
+  //   window.matchMedia = function(query) {
+  //     if (query.includes('display-mode: standalone') || query.includes('display-mode: fullscreen')) {
+  //       return {
+  //         matches: true,
+  //         media: query,
+  //         onchange: null,
+  //         addEventListener: () => {},
+  //         removeEventListener: () => {},
+  //         addListener: () => {},
+  //         removeListener: () => {},
+  //         dispatchEvent: () => false,
+  //       };
+  //     }
+  //     return originalMatchMedia.call(window, query);
+  //   };
 
-  // 3. Gamepad API Support
-  // Some WebViews lazily load the gamepad API. This ensures it's "visible" to the site scripts.
-  if (!navigator.getGamepads) {
-    navigator.getGamepads = () => [];
-  }
+  //   // 3. Gamepad API Support
+  //   // Some WebViews lazily load the gamepad API. This ensures it's "visible" to the site scripts.
+  //   if (!navigator.getGamepads) {
+  //     navigator.getGamepads = () => [];
+  //   }
 
-  true;
-})();
-`;
+  //   true;
+  // })();
+  // `;
 
   const PlatformSpecificUA = Platform.select({
     ios: 'Mozilla/5.0 (iPad; CPU OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1',
@@ -1282,7 +1323,7 @@ export default function Index() {
   }, [width, height]);
 
   const menuPanGesture = Gesture.Pan()
-    .enabled(mode !== APP_MODES.PC_GAMEPAD)
+    .enabled(true)
     .minDistance(10) // Prevents Pan from stealing taps if your finger wiggles slightly
     .onChange((e) => {
       const maxX = width - BOUNDARY - menuWidth.value;
@@ -1297,6 +1338,7 @@ export default function Index() {
 
   const pillAnimatedStyle = useAnimatedStyle(() => ({
     width: withTiming(isMenuExpanded.value ? EXPANDED_WIDTH : CLOSED_WIDTH),
+    backgroundColor: colors.cloudGamepadBase,
   }));
 
   const expandedContentStyle = useAnimatedStyle(() => ({
@@ -1309,7 +1351,7 @@ export default function Index() {
     position: 'absolute',
   }));
 
-  const ellipsisIconStyle = useAnimatedStyle(() => ({
+  const hamburgerIconStyle = useAnimatedStyle(() => ({
     opacity: withTiming(isMenuExpanded.value ? 0 : 1),
     transform: [{ rotate: withTiming(isMenuExpanded.value ? '90deg' : '0deg') }],
     position: 'absolute',
@@ -1318,46 +1360,61 @@ export default function Index() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <StatusBar hidden={true} />
       {/* <LiquidBackground /> */}
-      {mode === APP_MODES.PC_GAMEPAD && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#182129' }]}>
-          <TurnkeyBackground />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#182129' }]}>
+        {/* <LiquidBackground /> */}
+        <View style={{ flex: 1 }}>
+          <WebView
+            style={{ flex: 1 }}
+            source={{
+              uri,
+              headers: { 'X-Requested-With': '' },
+            }}
+            injectedJavaScript={initialiseGamepad + temporaryCleanScript}
+            ref={webViewRef}
+            // userAgent={GOOGLE_BYPASS_UA}
+            userAgent={PlatformSpecificUA}
+            onMessage={(event) => {}}
+            // Tells iOS to request the desktop site at the network level
+            preferredContentMode="desktop"
+            injectedJavaScriptBeforeContentLoaded={PWA_CLEAN_SPOOF}
+            // Standard requirements
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            scalesPageToFit={false}
+            allowsInlineMediaPlayback={true} // CRITICAL: Keeps video inside the webpage
+            mediaPlaybackRequiresUserAction={false}
+            // Android specific text scaling (100 is default)
+            textZoom={95}
+          />
         </View>
-      )}
-      {mode === APP_MODES.CLOUD_GAMING && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#182129' }]}>
-          {/* <LiquidBackground /> */}
-          <View style={{ flex: 1 }}>
-            <WebView
-              style={{ flex: 1 }}
-              source={{
-                uri,
-                headers: { 'X-Requested-With': '' },
-              }}
-              injectedJavaScript={initialiseGamepad}
-              ref={webViewRef}
-              // userAgent={GOOGLE_BYPASS_UA}
-              userAgent={PlatformSpecificUA}
-              onMessage={(event) => {}}
-              // Tells iOS to request the desktop site at the network level
-              preferredContentMode="desktop"
-              injectedJavaScriptBeforeContentLoaded={PWA_CLEAN_SPOOF}
-              // Standard requirements
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              scalesPageToFit={false}
-              allowsInlineMediaPlayback={true} // CRITICAL: Keeps video inside the webpage
-              mediaPlaybackRequiresUserAction={false}
-              // Android specific text scaling (100 is default)
-              textZoom={95}
-            />
-          </View>
-        </View>
-      )}
+      </View>
 
       <GestureDetector gesture={menuPanGesture}>
         <Animated.View style={[styles.topBar, menuAnimatedStyle]}>
           <Animated.View style={[styles.pillBar, pillAnimatedStyle]}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => {
+                setGamepadToggled((prev) => !prev);
+              }}
+            >
+              <Ionicons
+                name="game-controller-outline"
+                size={26}
+                color={colors.cloudGamepadText}
+              />
+              {gamepadToggled && (
+                <SimpleLineIcons
+                  name="ban"
+                  size={40}
+                  color={colors.cloudGamepadText}
+                  style={styles.banIcon}
+                />
+              )}
+            </Pressable>
+
             <Animated.View
               style={[
                 { flexDirection: 'row', alignItems: 'center', gap: 15 },
@@ -1371,7 +1428,11 @@ export default function Index() {
                   setOnboardingVisible(true);
                 }}
               >
-                <Ionicons name="information-circle-outline" size={32} color="black" />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={32}
+                  color={colors.cloudGamepadText}
+                />
               </Pressable>
 
               <Pressable
@@ -1381,28 +1442,12 @@ export default function Index() {
                   setSettingsVisible(true);
                 }}
               >
-                <Ionicons name="settings-outline" size={28} color="black" />
+                <Ionicons
+                  name="settings-outline"
+                  size={28}
+                  color={colors.cloudGamepadText}
+                />
               </Pressable>
-
-              {!isPcGamepad && (
-                <Pressable
-                  style={styles.iconButton}
-                  onPress={() => {
-                    if (!isMenuExpanded.value) return;
-                    setGamepadToggled((prev) => !prev);
-                  }}
-                >
-                  <Ionicons name="game-controller-outline" size={34} color="black" />
-                  {gamepadToggled && (
-                    <SimpleLineIcons
-                      name="ban"
-                      size={40}
-                      color="black"
-                      style={styles.banIcon}
-                    />
-                  )}
-                </Pressable>
-              )}
 
               <Pressable
                 style={styles.iconButton}
@@ -1411,25 +1456,23 @@ export default function Index() {
                   router.back();
                 }}
               >
-                <Ionicons name="exit-outline" size={32} color="black" />
+                <Ionicons name="exit-outline" size={32} color={colors.cloudGamepadText} />
               </Pressable>
             </Animated.View>
 
-            {!isPcGamepad && (
-              <Pressable
-                style={[styles.iconButton, { position: 'absolute', right: 10 }]}
-                onPress={() => {
-                  isMenuExpanded.value = !isMenuExpanded.value;
-                }}
-              >
-                <Animated.View style={closeIconStyle}>
-                  <Ionicons name="close" size={32} color="black" />
-                </Animated.View>
-                <Animated.View style={ellipsisIconStyle}>
-                  <Ionicons name="ellipsis-horizontal" size={32} color="black" />
-                </Animated.View>
-              </Pressable>
-            )}
+            <Pressable
+              style={[styles.iconButton, { position: 'absolute', right: 10 }]}
+              onPress={() => {
+                isMenuExpanded.value = !isMenuExpanded.value;
+              }}
+            >
+              <Animated.View style={closeIconStyle}>
+                <Ionicons name="close" size={32} color={colors.cloudGamepadText} />
+              </Animated.View>
+              <Animated.View style={hamburgerIconStyle}>
+                <Ionicons name="menu" size={32} color={colors.cloudGamepadText} />
+              </Animated.View>
+            </Pressable>
           </Animated.View>
         </Animated.View>
       </GestureDetector>
@@ -1478,20 +1521,38 @@ export default function Index() {
                 style={[styles.r3l3, leftDisappearingCluster, leftDisappearingJoystick]}
               >
                 <Animated.View
-                  style={[{ zIndex: 1 }, styles.r3l3iconParent, leftL3Highlight]}
+                  style={[{ zIndex: 1 }, styles.r3l3iconParent, leftL3Opacity]}
                 >
-                  <L3Icon width={40} height={40} ref={leftL3} color={iconColor} />
+                  <Animated.View style={leftL3Highlight} />
+                  <View style={styles.stickButtonInner}>
+                    {/* <L3Icon width={40} height={40} ref={leftL3} color={iconColor} /> */}
+                    <Animated.Text
+                      ref={leftL3}
+                      style={[styles.stickButtonText, { color: iconColor }]}
+                    >
+                      LS
+                    </Animated.Text>
+                  </View>
                 </Animated.View>
 
                 <Animated.View
                   style={[
                     { zIndex: -1 },
                     styles.r3l3iconParent,
-                    leftR3Highlight,
+                    leftR3Opacity,
                     hiddenIconStyleLeft,
                   ]}
                 >
-                  <R3Icon width={40} height={40} ref={leftR3} color={iconColor} />
+                  <Animated.View style={leftR3Highlight} />
+                  <View style={styles.stickButtonInner}>
+                    {/* <R3Icon width={40} height={40} ref={leftR3} color={iconColor} /> */}
+                    <Animated.Text
+                      ref={leftR3}
+                      style={[styles.stickButtonText, { color: iconColor }]}
+                    >
+                      RS
+                    </Animated.Text>
+                  </View>
                 </Animated.View>
               </Animated.View>
 
@@ -1526,10 +1587,7 @@ export default function Index() {
                         alignSelf: 'flex-start',
                         gap: 40,
                         flex: 1,
-                        marginTop:
-                          mode === APP_MODES.PC_GAMEPAD
-                            ? MENU_BUTTON_SIZE + (-1 * height * 0.52) / 2
-                            : -1 * (MENU_BUTTON_SIZE + (-1 * height * 0.52) / 2), // Tweak this negative value to move it further up
+                        marginTop: -1 * (MENU_BUTTON_SIZE + (-1 * height * 0.52) / 2), // Tweak this negative value to move it further up
                         // borderColor: 'black',
                         // borderWidth: 2,
                         // maginBottom: 180,
@@ -1550,12 +1608,14 @@ export default function Index() {
                           borderRadius: MENU_BUTTON_SIZE / 2,
                           justifyContent: 'center',
                           alignItems: 'center',
-                          backgroundColor: isPcGamepad
-                            ? '#c1c7ce'
-                            : 'rgba(194, 194, 194, 0.82)',
+                          backgroundColor: colors.cloudGamepadBase,
                         }}
                       >
-                        <Ionicons name="albums-outline" size={20} color={iconColor} />
+                        <Ionicons
+                          name="albums-outline"
+                          size={20}
+                          color={colors.cloudGamepadText}
+                        />
                       </View>
                     </Animated.View>
                     <Animated.View
@@ -1570,12 +1630,10 @@ export default function Index() {
                           borderRadius: MENU_BUTTON_SIZE / 2,
                           justifyContent: 'center',
                           alignItems: 'center',
-                          backgroundColor: isPcGamepad
-                            ? '#c1c7ce'
-                            : 'rgba(194, 194, 194, 0.82)',
+                          backgroundColor: colors.cloudGamepadBase,
                         }}
                       >
-                        <Ionicons name="menu" size={20} color={iconColor} />
+                        <Ionicons name="menu" size={20} color={colors.cloudGamepadText} />
                       </View>
                     </Animated.View>
                   </Animated.View>
@@ -1612,20 +1670,38 @@ export default function Index() {
                 style={[styles.r3l3, rightDisappearingCluster, rightDisappearingJoystick]}
               >
                 <Animated.View
-                  style={[{ zIndex: 1 }, styles.r3l3iconParent, rightR3Highlight]}
+                  style={[{ zIndex: 1 }, styles.r3l3iconParent, rightR3Opacity]}
                 >
-                  <R3Icon width={40} height={40} ref={rightR3} color={iconColor} />
+                  <Animated.View style={rightR3Highlight} />
+                  <View style={styles.stickButtonInner}>
+                    {/* <R3Icon width={40} height={40} ref={rightR3} color={iconColor} /> */}
+                    <Animated.Text
+                      ref={rightR3}
+                      style={[styles.stickButtonText, { color: iconColor }]}
+                    >
+                      RS
+                    </Animated.Text>
+                  </View>
                 </Animated.View>
 
                 <Animated.View
                   style={[
                     { zIndex: -1 },
                     styles.r3l3iconParent,
-                    rightL3Highlight,
+                    rightL3Opacity,
                     hiddenIconStyleRight,
                   ]}
                 >
-                  <L3Icon ref={rightL3} width={40} height={40} color={iconColor} />
+                  <Animated.View style={rightL3Highlight} />
+                  <View style={styles.stickButtonInner}>
+                    {/* <L3Icon ref={rightL3} width={40} height={40} color={iconColor} /> */}
+                    <Animated.Text
+                      ref={rightL3}
+                      style={[styles.stickButtonText, { color: iconColor }]}
+                    >
+                      LS
+                    </Animated.Text>
+                  </View>
                 </Animated.View>
               </Animated.View>
             </View>
@@ -1691,32 +1767,67 @@ export default function Index() {
               </View>
             </View>
 
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Sensitivity (Gain)</Text>
-              <View style={styles.stepperControl}>
-                <Pressable
-                  style={styles.stepperButton}
-                  onPress={() => {
-                    const newGain = Math.max(0.5, gain - 0.5);
-                    setGain(newGain);
-                    gainSV.value = newGain;
-                  }}
-                >
-                  <Ionicons name="remove" size={20} color="#1C212A" />
-                </Pressable>
-                <Text style={styles.stepperValue}>{gain.toFixed(1)}</Text>
-                <Pressable
-                  style={styles.stepperButton}
-                  onPress={() => {
-                    const newGain = Math.min(10.0, gain + 0.5);
-                    setGain(newGain);
-                    gainSV.value = newGain;
-                  }}
-                >
-                  <Ionicons name="add" size={20} color="#1C212A" />
-                </Pressable>
-              </View>
-            </View>
+            {trackpadMode && (
+              <>
+                <View style={styles.settingRow}>
+                  <Text style={styles.settingLabel}>Sensitivity</Text>
+                  <View style={styles.stepperControl}>
+                    <Pressable
+                      style={styles.stepperButton}
+                      onPress={() => {
+                        const newSens = Math.max(0, sensitivity - 1);
+                        setSensitivity(newSens);
+                        sensitivitySV.value = newSens;
+                      }}
+                    >
+                      <Ionicons name="remove" size={20} color="#1C212A" />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{sensitivity}</Text>
+                    <Pressable
+                      style={styles.stepperButton}
+                      onPress={() => {
+                        const newSens = Math.min(sensitivityMax, sensitivity + 1);
+                        setSensitivity(newSens);
+                        sensitivitySV.value = newSens;
+                      }}
+                    >
+                      <Ionicons name="add" size={20} color="#1C212A" />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.settingRow}>
+                  <Text style={styles.settingLabel}>Mode</Text>
+                  <View style={styles.segmentedControl}>
+                    {Object.keys(GAIN_PROFILES).map((profileKey) => {
+                      const profileValue = GAIN_PROFILES[profileKey];
+                      const isActive = gain === profileValue;
+                      return (
+                        <Pressable
+                          key={profileKey}
+                          style={[styles.segmentButton, isActive && styles.segmentActive]}
+                          onPress={() => {
+                            setGain(profileValue);
+                            gainSV.value = profileValue;
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              isActive && styles.segmentTextActive,
+                            ]}
+                          >
+                            {profileKey === 'fps'
+                              ? 'FPS'
+                              : profileKey.charAt(0).toUpperCase() + profileKey.slice(1)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1725,6 +1836,12 @@ export default function Index() {
         visible={onboardingVisible}
         onClose={() => setOnboardingVisible(false)}
       />
+
+      {/* Render up to 5 multi-touch indicators */}
+      {isTouchVisible &&
+        [0, 1, 2, 3, 4].map((i) => (
+          <TouchCursor key={i} index={i} debugTouches={debugTouches} />
+        ))}
     </GestureHandlerRootView>
   );
 }
@@ -1780,8 +1897,24 @@ const styles = StyleSheet.create({
 
   r3l3iconParent: {
     position: 'absolute',
-    borderRadius: 40,
-    padding: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickButtonInner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.cloudGamepadBase,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickButtonText: {
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 15,
+    width: 40,
+    height: 40,
+    lineHeight: 40,
   },
   menuButtonContainer: {
     width: MENU_BUTTON_SIZE,
@@ -1808,11 +1941,11 @@ const styles = StyleSheet.create({
   pillBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#c2c2c2d0',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
     gap: 15,
+    overflow: 'hidden',
   },
   iconButton: {
     width: 42,
@@ -1886,7 +2019,7 @@ const styles = StyleSheet.create({
   segmentText: {
     color: '#666',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 11,
   },
   segmentTextActive: {
     color: '#1C212A',

@@ -1,84 +1,193 @@
 import colors from '@/assets/images/colors';
 import { APP_MODES, useMode } from '@/context/ModeContext';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-const options = [
-  {
-    title: 'WEB GAMING',
-    description: 'Full gamepad controls for gaming on the web',
-    icon: 'cloud-outline',
-    log: 'Cloud Gaming',
-    mode: APP_MODES.CLOUD_GAMING,
-    route: '/cloud-gamepad',
-  },
-  {
-    title: 'PC GAMEPAD',
-    description: 'Use your device as gamepad for your PC',
-    icon: 'gamepad-variant-outline',
-    log: 'Gamepad for PC',
-    mode: APP_MODES.PC_GAMEPAD,
-    route: Platform.OS === 'ios' ? '/gamepad' : '/pc-gamepad',
-  },
-];
+const GAIN_PROFILES = {
+  normal: 1,
+  fps: 1.5,
+  pro: 2,
+};
+const sensitivityMax = 20;
 
 export default function HomeScreen() {
   const { setMode } = useMode();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 700;
-  const cardSize = isWide ? Math.min(240, (width - 96) / 2) : Math.min(250, width - 56);
+
+  const [trackpadMode, setTrackpadMode] = useState(true);
+  const [gain, setGain] = useState(1.5);
+  const [sensitivity, setSensitivity] = useState(10);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const savedTrackpadMode = await AsyncStorage.getItem('trackpadMode');
+        if (savedTrackpadMode !== null) setTrackpadMode(JSON.parse(savedTrackpadMode));
+        const savedGain = await AsyncStorage.getItem('gain');
+        if (savedGain !== null) setGain(JSON.parse(savedGain));
+        const savedSensitivity = await AsyncStorage.getItem('trackpadSensitivity');
+        if (savedSensitivity !== null) setSensitivity(JSON.parse(savedSensitivity));
+      } catch (error) {
+        console.error('Failed to load settings', error);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const saveSetting = async (key, value, setter) => {
+    setter(value);
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>
-          Ready to{'\n'}
-          <Text style={styles.heroTitleHighlight}>Play</Text> ?
-        </Text>
-      </View>
+    <View
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        backgroundColor: colors.background,
+      }}
+    >
+      <View style={styles.container}>
+        <View style={styles.hero}>
+          {/* <Text style={styles.heroTitle}>
+            Ready to{'\n'}
+            <Text style={styles.heroTitleHighlight}>Play</Text> ?
+          </Text> */}
+          <View style={styles.illustrationContainer}>
+            <MaterialCommunityIcons name="controller" size={64} color={colors.accent} />
+            <View style={styles.dotsContainer}>
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+            </View>
+            <MaterialCommunityIcons
+              name="cloud-outline"
+              size={72}
+              color={colors.accent}
+            />
+          </View>
+        </View>
 
-      <View style={[styles.cards, isWide && styles.cardsWide]}>
-        {options.map((option) => (
+        <View style={styles.contentContainer}>
+          {/* <Text style={styles.mainTitle}>WEB GAMING</Text> */}
+          <Text style={styles.mainDescription}>
+            Full gamepad controls for {'\n'}gaming on the web
+          </Text>
+
           <Pressable
-            key={option.title}
             onPress={() => {
-              setMode(option.mode);
-              console.log(option.log);
-              if (option.route) {
-                router.push(option.route);
-              }
+              setMode(APP_MODES.CLOUD_GAMING);
+              router.push('/cloud-gamepad');
             }}
             style={({ pressed }) => [
-              styles.card,
-              { width: cardSize },
-              pressed && styles.cardPressed,
+              styles.playButton,
+              pressed && styles.playButtonPressed,
             ]}
           >
-            <View style={styles.cardContent}>
-              <MaterialCommunityIcons
-                name={option.icon}
-                size={56}
-                color={colors.accent}
-              />
-              <View style={styles.cardTextContainer}>
-                <Text style={styles.cardTitle}>{option.title}</Text>
-                <Text style={styles.cardDescription}>{option.description}</Text>
+            <Text style={styles.playButtonText}>PLAY</Text>
+          </Pressable>
+
+          <View style={styles.settingsContainer}>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Right Stick Mode</Text>
+              <View style={styles.segmentedControl}>
+                <Pressable
+                  style={[styles.segmentButton, trackpadMode && styles.segmentActive]}
+                  onPress={() => saveSetting('trackpadMode', true, setTrackpadMode)}
+                >
+                  <Text
+                    style={[styles.segmentText, trackpadMode && styles.segmentTextActive]}
+                  >
+                    Swiping
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.segmentButton, !trackpadMode && styles.segmentActive]}
+                  onPress={() => saveSetting('trackpadMode', false, setTrackpadMode)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      !trackpadMode && styles.segmentTextActive,
+                    ]}
+                  >
+                    Joystick
+                  </Text>
+                </Pressable>
               </View>
             </View>
-            <View style={styles.arrowCircle}>
-              <MaterialCommunityIcons name="arrow-right" size={35} color={colors.text} />
-            </View>
-          </Pressable>
-        ))}
+
+            {trackpadMode && (
+              <>
+                <View style={styles.settingRow}>
+                  <Text style={styles.settingLabel}>Sensitivity</Text>
+                  <View style={styles.stepperControl}>
+                    <Pressable
+                      style={styles.stepperButton}
+                      onPress={() =>
+                        saveSetting(
+                          'trackpadSensitivity',
+                          Math.max(0, sensitivity - 1),
+                          setSensitivity
+                        )
+                      }
+                    >
+                      <Ionicons name="remove" size={20} color={colors.text} />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{sensitivity}</Text>
+                    <Pressable
+                      style={styles.stepperButton}
+                      onPress={() =>
+                        saveSetting(
+                          'trackpadSensitivity',
+                          Math.min(sensitivityMax, sensitivity + 1),
+                          setSensitivity
+                        )
+                      }
+                    >
+                      <Ionicons name="add" size={20} color={colors.text} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.settingRow}>
+                  <Text style={styles.settingLabel}>Mode</Text>
+                  <View style={styles.segmentedControl}>
+                    {Object.keys(GAIN_PROFILES).map((profileKey) => {
+                      const profileValue = GAIN_PROFILES[profileKey];
+                      const isActive = gain === profileValue;
+                      return (
+                        <Pressable
+                          key={profileKey}
+                          style={[styles.segmentButton, isActive && styles.segmentActive]}
+                          onPress={() => saveSetting('gain', profileValue, setGain)}
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              isActive && styles.segmentTextActive,
+                            ]}
+                          >
+                            {profileKey === 'fps'
+                              ? 'FPS'
+                              : profileKey.charAt(0).toUpperCase() + profileKey.slice(1)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -88,17 +197,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: colors.background,
-    gap: 48,
-    justifyContent: 'center',
+    gap: 50,
+    justifyContent: 'flex-start',
     paddingHorizontal: 28,
+    // paddingTop: 40,
+    paddingTop: 100,
   },
   hero: {
     alignItems: 'center',
   },
   heroTitle: {
     color: colors.text,
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: 'bold',
     textAlign: 'center',
     lineHeight: 55,
@@ -106,66 +216,121 @@ const styles = StyleSheet.create({
   heroTitleHighlight: {
     color: colors.accent,
   },
-  cards: {
-    alignItems: 'center',
-    gap: 26,
-    width: '100%',
-  },
-  cardsWide: {
+  illustrationContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  card: {
-    aspectRatio: 1,
-    backgroundColor: '#1d2831',
-    borderColor: '#8d8995',
-    borderRadius: 34,
-    borderWidth: 1.5,
-    padding: 22,
-  },
-  cardPressed: {
-    backgroundColor: '#22313b',
-    borderColor: colors.accent,
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
-  },
-  cardContent: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 40,
     gap: 16,
   },
-  arrowCircle: {
-    position: 'absolute',
-    top: 22,
-    right: 22,
-    alignItems: 'center',
-    // backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    // borderColor: 'rgba(255, 255, 255, 0.4)',
-    // borderWidth: 1,
-    borderRadius: 16,
-    // height: 32,
-    justifyContent: 'center',
-    // width: 32,
-    transform: [{ rotate: '315deg' }],
-    opacity: 0.6,
+  dotsContainer: {
+    flexDirection: 'row',
+    gap: 6,
   },
-  cardTextContainer: {
-    alignItems: 'center',
-    gap: 8,
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+    opacity: 0.8,
   },
-  cardTitle: {
+  contentContainer: {
+    alignItems: 'center',
+    gap: 24,
+    width: '100%',
+  },
+  mainTitle: {
     color: colors.accent,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: 'bold',
     letterSpacing: 0,
     textAlign: 'center',
   },
-  cardDescription: {
+  mainDescription: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '400',
+    lineHeight: 26,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  playButton: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+    borderWidth: 1.5,
+    borderRadius: 30,
+    marginTop: 16,
+    paddingHorizontal: 56,
+    paddingVertical: 10,
+  },
+  playButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
+  },
+  playButtonText: {
+    color: colors.background,
+    // color: colors.text,
+    fontSize: 15,
+    // fontWeight: 'bold',
+    letterSpacing: 1.1,
+  },
+  settingsContainer: {
+    width: 260,
+    marginTop: 40,
+    gap: 20,
+  },
+  settingRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    width: '100%',
+    gap: 8,
+  },
+  settingLabel: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
-    textAlign: 'center',
+    fontWeight: '600',
+    opacity: 0.8,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    padding: 4,
+    width: '100%',
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentActive: {
+    backgroundColor: colors.accent,
+  },
+  segmentText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  segmentTextActive: {
+    color: colors.background,
+  },
+  stepperControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    width: '100%',
+  },
+  stepperButton: {
+    padding: 6,
+  },
+  stepperValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

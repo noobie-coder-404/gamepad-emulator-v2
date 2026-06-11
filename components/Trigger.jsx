@@ -4,8 +4,6 @@ import { MotiView } from 'moti';
 
 import colors from '@/assets/images/colors';
 
-import { APP_MODES, useMode } from '@/context/ModeContext';
-
 import Animated, {
   Extrapolation,
   interpolate,
@@ -21,9 +19,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 function RippleRing({ slotIndex, rippleElapsed, rippleDuration, rippleInterval }) {
-  const { mode } = useMode();
-  const isCloud = mode === APP_MODES.CLOUD_GAMING;
-
   const rippleStyle = useAnimatedStyle(() => {
     const latestLaunchIndex = Math.floor(rippleElapsed.value / rippleInterval);
     const launchIndex = latestLaunchIndex - slotIndex;
@@ -68,7 +63,7 @@ function RippleRing({ slotIndex, rippleElapsed, rippleDuration, rippleInterval }
         StyleSheet.absoluteFillObject,
         {
           borderRadius: 100,
-          borderColor: isCloud ? 'rgba(225, 223, 223, 0.8)' : colors.accent,
+          borderColor: colors.triggerRipple,
         },
         rippleStyle,
       ]}
@@ -83,9 +78,6 @@ export default function Trigger({
   triggerSide,
   triggerLength,
 }) {
-  const { mode } = useMode();
-  const isCloud = mode === APP_MODES.CLOUD_GAMING;
-
   const maxButtonOrbMovement = 25; // bigger = farther down when shoulder button is pressed
   const maxTriggerOrbMovement = 25; // bigger = farther up when trigger is fully pulled
   const rippleDuration = 1500;
@@ -259,7 +251,7 @@ export default function Trigger({
           flexDirection: 'row',
           justifyContent: 'center',
           padding: 40,
-          paddingHorizontal: isCloud ? 40 : 80,
+          paddingHorizontal: 40,
 
           // backgroundColor: "powderblue",
           // alignItems: "flex-start",
@@ -274,8 +266,8 @@ export default function Trigger({
               alignItems: 'center',
               justifyContent: 'center',
               // backgroundColor: 'rgba(255, 255, 255,0.8)',
-              backgroundColor: '#c1c7ce',
-              borderColor: 'rgba(211, 211, 211, 0.8)',
+              backgroundColor: colors.cloudGamepadBase,
+              borderColor: colors.cloudGamepadText,
               // borderWidth: 4,
               zIndex: -1,
               // opacity: 0,
@@ -312,8 +304,8 @@ export default function Trigger({
                 StyleSheet.absoluteFillObject,
                 {
                   borderRadius: 100,
-                  borderColor: isCloud ? 'rgba(225, 223, 223, 0.8)' : colors.accent,
-                  opacity: isCloud ? 0.3 : 1,
+                  borderColor: colors.triggerBorder,
+                  opacity: 0.3,
                   borderWidth: 2,
                   transform: [{ scale: 1.4 }],
                 },
@@ -327,11 +319,14 @@ export default function Trigger({
                   {
                     fontSize: 10,
                     fontWeight: 'bold',
-                    color: 'rgba(60, 60, 61, 0.8)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    color: colors.cloudGamepadText,
                     textAlign: 'center',
-                    // position: 'absolute' // Optional: use this if the text pushes layout, but unlikely here
+                    borderWidth: 2,
+                    borderColor: colors.triggerTextBorder,
+                    borderRadius: 999,
+                    width: 30,
+                    height: 30,
+                    lineHeight: 26,
                   },
                   triggerTextVisible,
                 ]}
@@ -343,13 +338,15 @@ export default function Trigger({
                   {
                     fontSize: 10,
                     fontWeight: 'bold',
-                    color: 'rgba(60, 60, 61, 0.8)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    color: colors.cloudGamepadText,
                     position: 'absolute',
                     textAlign: 'center',
-                    // backgroundColor: "rgba(255, 255, 255,0.8)",
-                    // position: 'absolute' // Optional: use this if the text pushes layout, but unlikely here
+                    borderWidth: 2,
+                    borderColor: colors.triggerTextBorder,
+                    borderRadius: 999,
+                    width: 30,
+                    height: 30,
+                    lineHeight: 26,
                   },
                   buttonTextVisible,
                 ]}
@@ -358,17 +355,20 @@ export default function Trigger({
               </Animated.Text>
             </View>
           ) : (
-            <View>
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <Animated.Text
                 style={[
                   {
                     fontSize: 10,
                     fontWeight: 'bold',
-                    color: 'rgba(60, 60, 61, 0.8)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    color: colors.cloudGamepadText,
                     textAlign: 'center',
-                    // position: 'absolute' // Optional: use this if the text pushes layout, but unlikely here
+                    borderWidth: 2,
+                    borderColor: colors.triggerTextBorder,
+                    borderRadius: 999,
+                    width: 30,
+                    height: 30,
+                    lineHeight: 26,
                   },
                   triggerTextVisible,
                 ]}
@@ -380,13 +380,15 @@ export default function Trigger({
                   {
                     fontSize: 10,
                     fontWeight: 'bold',
-                    color: 'rgba(60, 60, 61, 0.8)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    color: colors.cloudGamepadText,
                     position: 'absolute',
                     textAlign: 'center',
-                    // backgroundColor: "rgba(255, 255, 255,0.8)",
-                    // position: 'absolute' // Optional: use this if the text pushes layout, but unlikely here
+                    borderWidth: 2,
+                    borderColor: colors.triggerTextBorder,
+                    borderRadius: 999,
+                    width: 30,
+                    height: 30,
+                    lineHeight: 26,
                   },
                   buttonTextVisible,
                 ]}

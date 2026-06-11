@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { APP_MODES, useMode } from '@/context/ModeContext';
+import colors from '@/assets/images/colors';
 import Animated, {
   measure,
   runOnUI,
@@ -13,9 +13,6 @@ export default function Joystick({
   knobOffset,
   joystickMeasurements,
 }) {
-  //   const joystickCenter = useSharedValue({ x: 0, y: 0 });
-  const { mode } = useMode();
-
   const getJoystickMeasurements = () => {
     runOnUI(() => {
       'worklet';
@@ -86,36 +83,15 @@ export default function Joystick({
     };
   });
 
-  const webGamepadStyles = {
-    knob: {
-      backgroundColor: 'rgba(194, 194, 194, 0.82)',
-    },
-    outerCircle: {
-      borderWidth: 4,
-
-      backgroundColor: '#ffffff00',
-      borderColor: '#76767684',
-    },
-  };
-
-  const changedStyles =
-    mode === APP_MODES.CLOUD_GAMING ? webGamepadStyles : { knob: {}, outerCircle: {} };
-
   return (
     <View style={joystickStyles.container}>
       <Animated.View
         collapsable={false}
         ref={joystick}
         onLayout={getJoystickMeasurements}
-        style={[
-          joystickStyles.outerCircle,
-          floatingJoystickStyles,
-          changedStyles.outerCircle,
-        ]}
+        style={[joystickStyles.outerCircle, floatingJoystickStyles]}
       >
-        <Animated.View
-          style={[joystickStyles.knob, knobAnimation, changedStyles.knob]}
-        ></Animated.View>
+        <Animated.View style={[joystickStyles.knob, knobAnimation]}></Animated.View>
       </Animated.View>
     </View>
   );
@@ -124,67 +100,23 @@ export default function Joystick({
 const joystickStyles = StyleSheet.create({
   knob: {
     borderRadius: 50,
-    // border: "2px solid purple",
-    // flex: 1,
     height: 45,
     width: 45,
-    backgroundColor: '#DE8930',
-    // backgroundColor: '#e1e1e1',
-    // backgroundColor: '#bdccec',
-    // boxShadow: [
-    //   // inner dark edge (bottom-right)
-    //   {
-    //     offsetX: -6,
-    //     offsetY: 15,
-    //     blurRadius: 22,
-    //     spreadDistance: 0,
-    //     color: 'rgba(0,0,0,0.20)',
-    //     inset: true,
-    //   },
-    //   // inner highlight (top-left)
-    //   {
-    //     offsetX: 4,
-    //     offsetY: -4,
-    //     blurRadius: 18,
-    //     spreadDistance: 0,
-    //     color: 'rgba(255,255,255,0.85)',
-    //     inset: true,
-    //   },
-    //   // optional outer lift
-    //   {
-    //     offsetX: -3,
-    //     offsetY: 1,
-    //     blurRadius: 8,
-    //     spreadDistance: 0,
-    //     color: 'rgba(0,0,0,0.10)',
-    //   },
-    // ],
+    backgroundColor: colors.joystickKnob,
   },
   outerCircle: {
     borderRadius: 50,
-    // border: "2px solid purple",
-    // flex: 1,
     height: 90,
     width: 90,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#202e38',
-    // backgroundColor: '#2e6fa9',
-    // borderColor: '#6786c5',
-    // borderColor: '#7096e2',
-    // borderColor: '#DE8930,
-    borderColor: '#c1c7ce',
-    borderWidth: 15,
-    // boxShadow: '0px 2px 8px -3px rgb(171, 171, 171)',
+    backgroundColor: '#ffffff00',
+    borderColor: colors.joystickBorder,
+    borderWidth: 4,
   },
   container: {
-    // height: 120,
-    // width: 120,
     flex: 1,
-    // flex: 0.8,
     justifyContent: 'center',
     alignItems: 'center',
-    // backgroundColor: 'white',
-    // borderWidth: 2,
   },
 });
