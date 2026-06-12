@@ -1,47 +1,19 @@
 import colors from '@/assets/images/colors';
 import { APP_MODES, useMode } from '@/context/ModeContext';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-const GAIN_PROFILES = {
-  normal: 1,
-  fps: 1.5,
-  pro: 2,
-};
-const sensitivityMax = 20;
+// Disable font scaling globally to prevent layout breaking on devices with large system fonts
+if (Text.defaultProps == null) Text.defaultProps = {};
+Text.defaultProps.allowFontScaling = false;
+
+if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+TextInput.defaultProps.allowFontScaling = false;
 
 export default function HomeScreen() {
   const { setMode } = useMode();
   const router = useRouter();
-
-  const [trackpadMode, setTrackpadMode] = useState(true);
-  const [gain, setGain] = useState(1.5);
-  const [sensitivity, setSensitivity] = useState(10);
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const savedTrackpadMode = await AsyncStorage.getItem('trackpadMode');
-        if (savedTrackpadMode !== null) setTrackpadMode(JSON.parse(savedTrackpadMode));
-        const savedGain = await AsyncStorage.getItem('gain');
-        if (savedGain !== null) setGain(JSON.parse(savedGain));
-        const savedSensitivity = await AsyncStorage.getItem('trackpadSensitivity');
-        if (savedSensitivity !== null) setSensitivity(JSON.parse(savedSensitivity));
-      } catch (error) {
-        console.error('Failed to load settings', error);
-      }
-    };
-    loadSettings();
-  }, []);
-
-  const saveSetting = async (key, value, setter) => {
-    setter(value);
-    await AsyncStorage.setItem(key, JSON.stringify(value));
-  };
 
   return (
     <View
@@ -54,10 +26,10 @@ export default function HomeScreen() {
     >
       <View style={styles.container}>
         <View style={styles.hero}>
-          {/* <Text style={styles.heroTitle}>
+          <Text style={styles.heroTitle}>
             Ready to{'\n'}
             <Text style={styles.heroTitleHighlight}>Play</Text> ?
-          </Text> */}
+          </Text>
           <View style={styles.illustrationContainer}>
             <MaterialCommunityIcons name="controller" size={64} color={colors.accent} />
             <View style={styles.dotsContainer}>
@@ -93,102 +65,9 @@ export default function HomeScreen() {
           >
             <Text style={styles.playButtonText}>PLAY</Text>
           </Pressable>
-
-          <View style={styles.settingsContainer}>
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Right Stick Mode</Text>
-              <View style={styles.segmentedControl}>
-                <Pressable
-                  style={[styles.segmentButton, trackpadMode && styles.segmentActive]}
-                  onPress={() => saveSetting('trackpadMode', true, setTrackpadMode)}
-                >
-                  <Text
-                    style={[styles.segmentText, trackpadMode && styles.segmentTextActive]}
-                  >
-                    Swiping
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.segmentButton, !trackpadMode && styles.segmentActive]}
-                  onPress={() => saveSetting('trackpadMode', false, setTrackpadMode)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      !trackpadMode && styles.segmentTextActive,
-                    ]}
-                  >
-                    Joystick
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {trackpadMode && (
-              <>
-                <View style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>Sensitivity</Text>
-                  <View style={styles.stepperControl}>
-                    <Pressable
-                      style={styles.stepperButton}
-                      onPress={() =>
-                        saveSetting(
-                          'trackpadSensitivity',
-                          Math.max(0, sensitivity - 1),
-                          setSensitivity
-                        )
-                      }
-                    >
-                      <Ionicons name="remove" size={20} color={colors.text} />
-                    </Pressable>
-                    <Text style={styles.stepperValue}>{sensitivity}</Text>
-                    <Pressable
-                      style={styles.stepperButton}
-                      onPress={() =>
-                        saveSetting(
-                          'trackpadSensitivity',
-                          Math.min(sensitivityMax, sensitivity + 1),
-                          setSensitivity
-                        )
-                      }
-                    >
-                      <Ionicons name="add" size={20} color={colors.text} />
-                    </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>Mode</Text>
-                  <View style={styles.segmentedControl}>
-                    {Object.keys(GAIN_PROFILES).map((profileKey) => {
-                      const profileValue = GAIN_PROFILES[profileKey];
-                      const isActive = gain === profileValue;
-                      return (
-                        <Pressable
-                          key={profileKey}
-                          style={[styles.segmentButton, isActive && styles.segmentActive]}
-                          onPress={() => saveSetting('gain', profileValue, setGain)}
-                        >
-                          <Text
-                            style={[
-                              styles.segmentText,
-                              isActive && styles.segmentTextActive,
-                            ]}
-                          >
-                            {profileKey === 'fps'
-                              ? 'FPS'
-                              : profileKey.charAt(0).toUpperCase() + profileKey.slice(1)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              </>
-            )}
-          </View>
         </View>
       </View>
+      <View style={{ flex: 0.6 }}></View>
     </View>
   );
 }
@@ -197,11 +76,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    gap: 50,
-    justifyContent: 'flex-start',
+    gap: 80,
+    justifyContent: 'flex-end',
     paddingHorizontal: 28,
-    // paddingTop: 40,
-    paddingTop: 100,
   },
   hero: {
     alignItems: 'center',
@@ -236,7 +113,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     alignItems: 'center',
-    gap: 24,
+    gap: 30,
     width: '100%',
   },
   mainTitle: {
@@ -273,64 +150,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     // fontWeight: 'bold',
     letterSpacing: 1.1,
-  },
-  settingsContainer: {
-    width: 260,
-    marginTop: 40,
-    gap: 20,
-  },
-  settingRow: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    width: '100%',
-    gap: 8,
-  },
-  settingLabel: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-    opacity: 0.8,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 10,
-    padding: 4,
-    width: '100%',
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  segmentActive: {
-    backgroundColor: colors.accent,
-  },
-  segmentText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  segmentTextActive: {
-    color: colors.background,
-  },
-  stepperControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    width: '100%',
-  },
-  stepperButton: {
-    padding: 6,
-  },
-  stepperValue: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });
