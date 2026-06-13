@@ -14,6 +14,7 @@ import { Orbitron_900Black } from '@expo-google-fonts/orbitron';
 
 import colors from '@/assets/images/colors';
 import { useMode } from '@/context/ModeContext';
+import { fontScale, scale } from '@/helper-functions/scaling';
 
 //todo - make facepad and dpad buttons floating too, for better eyes-free usage
 
@@ -57,7 +58,7 @@ export default function Buttons({
           main: (
             <MaterialCommunityIcons
               name="gamepad-circle-outline"
-              size={28}
+              size={scale(28)}
               color={iconColor}
             />
           ),
@@ -73,11 +74,13 @@ export default function Buttons({
           ),
         }
       : {
-          main: <MaterialCommunityIcons name="gamepad" size={28} color={iconColor} />,
+          main: (
+            <MaterialCommunityIcons name="gamepad" size={scale(28)} color={iconColor} />
+          ),
           down: (
             <Entypo
               name="chevron-up"
-              size={28}
+              size={scale(28)}
               color={iconColor}
               style={{ transform: [{ rotate: '180deg' }] }}
             />
@@ -85,7 +88,7 @@ export default function Buttons({
           right: (
             <Entypo
               name="chevron-up"
-              size={28}
+              size={scale(28)}
               color={iconColor}
               style={{ transform: [{ rotate: '90deg' }] }}
             />
@@ -93,12 +96,12 @@ export default function Buttons({
           left: (
             <Entypo
               name="chevron-up"
-              size={28}
+              size={scale(28)}
               color={iconColor}
               style={{ transform: [{ rotate: '270deg' }] }}
             />
           ),
-          up: <Entypo name="chevron-up" size={28} color={iconColor} />,
+          up: <Entypo name="chevron-up" size={scale(28)} color={iconColor} />,
         };
 
   const previousButton = useSharedValue(null);
@@ -127,6 +130,11 @@ export default function Buttons({
           up: 'up',
         };
 
+  // Pre-calculate scaled values on the JS thread so they can be
+  // safely passed into the Reanimated UI worklets below!
+  const scaled75 = scale(75);
+  const scaled17 = scale(17);
+
   const buttonStyles = (direction, isActive, activeButton) => {
     'worklet';
 
@@ -153,8 +161,8 @@ export default function Buttons({
 
     // console.log('active button: ', activeButton);
 
-    const translateX = isActive ? 75 : 0;
-    const translateY = isActive ? 75 : 0;
+    const translateX = isActive ? scaled75 : 0;
+    const translateY = isActive ? scaled75 : 0;
 
     const directionMap = {
       'left-up': { x: -1, y: -1 },
@@ -173,7 +181,6 @@ export default function Buttons({
     return {
       transform: [
         {
-          // translateX: coords.x * translateX,
           translateX: withTiming(coords.x * translateX, {
             duration: 100,
             // easing: Easing.inOut(Easing.poly(9)),
@@ -181,7 +188,6 @@ export default function Buttons({
           }),
         },
         {
-          // translateY: coords.y * translateY,
           translateY: withTiming(coords.y * translateY, {
             duration: 100,
             // easing: Easing.inOut(Easing.poly(9)),
@@ -283,7 +289,7 @@ export default function Buttons({
       transform: [
         // {scaleX: 50},
         // {scaleY: 5},
-        { translateX: 17 },
+        { translateX: scaled17 },
         { rotate: activeButton.value ? rotateValue : '0deg' },
       ],
     };
@@ -304,8 +310,8 @@ export default function Buttons({
         style={[
           directionBar,
           {
-            width: 35, //used to be 70
-            height: 5,
+            width: scale(35), //used to be 70
+            height: scale(5),
             zIndex: -9999,
             position: 'absolute',
             backgroundColor: activeOptionColor,
@@ -315,8 +321,8 @@ export default function Buttons({
       <Animated.View
         style={[
           {
-            width: 20,
-            height: 20,
+            width: scale(20),
+            height: scale(20),
             borderRadius: 999,
             zIndex: -999,
             position: 'absolute',
@@ -395,7 +401,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     // backgroundColor: "pink",
-    padding: 20,
+    padding: scale(20),
     borderRadius: 999,
     // backgroundColor: '#9f9f9f'
     // height: 100,
@@ -405,8 +411,8 @@ const styles = StyleSheet.create({
     // flex: 1,
     // backgroundColor: '#E0E3E8',
     borderRadius: 999,
-    width: 52,
-    height: 52,
+    width: scale(52),
+    height: scale(52),
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -417,15 +423,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: 'bold',
     // fontStyle: 'helvetica',
-    fontSize: 15,
+    fontSize: fontScale(15),
     // fontFamily: 'Orbitron',
   },
   borderContainer: {
-    padding: 2,
+    padding: scale(2),
     borderWidth: 3,
     borderRadius: 999,
-    width: 42,
-    height: 42,
+    width: scale(42),
+    height: scale(42),
     justifyContent: 'center',
     alignItems: 'center',
   },

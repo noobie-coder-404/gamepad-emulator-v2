@@ -7,6 +7,7 @@ import { useMode } from '@/context/ModeContext';
 import { calculateOffset } from '@/helper-functions/calculateOffset';
 import { initialiseGamepad } from '@/helper-functions/gamepadInterface';
 import { isInside } from '@/helper-functions/isInside';
+import { fontScale, scale } from '@/helper-functions/scaling';
 import { PWA_CLEAN_SPOOF } from '@/helper-functions/spoof';
 import { useOneEuroFilter } from '@/hooks/useOneEuroFilter';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -72,7 +73,7 @@ const triggerDirectionUpwards = true;
 const continuousMode = false; // trigger and button can be controlled without lifting the finger up
 //proper continuous mode is yet to be implemented because that would require adding a deadzone
 const triggerLength = 70;
-const MENU_BUTTON_SIZE = 36;
+const MENU_BUTTON_SIZE = scale(36);
 
 // Temporary component to display touches for video recording
 const TouchCursor = ({ index, debugTouches }) => {
@@ -187,10 +188,14 @@ export default function Index() {
     };
   }, []);
 
-  const BOUNDARY = 10;
-  const CLOSED_WIDTH = 119;
-  const EXPANDED_WIDTH = 290;
-  const MENU_HEIGHT = 50;
+  const BOUNDARY = scale(10);
+  const CLOSED_WIDTH = scale(119);
+  const EXPANDED_WIDTH = scale(290);
+  const MENU_HEIGHT = scale(50);
+
+  const scaled20 = scale(20);
+  const scaled7 = scale(7);
+  const scaledMinus70 = scale(-70);
 
   const menuX = useSharedValue(width / 2 - CLOSED_WIDTH / 2);
   const menuY = useSharedValue(BOUNDARY);
@@ -1071,7 +1076,7 @@ export default function Index() {
   const hiddenIconStyleLeft = useAnimatedStyle(() => {
     if (rightJoystickFinger.value !== -1) {
       return {
-        transform: [{ translateY: withTiming(-70, { duration: 150 }) }],
+        transform: [{ translateY: withTiming(scaledMinus70, { duration: 150 }) }],
       };
     } else {
       return { transform: [{ translateY: withTiming(0, { duration: 150 }) }] };
@@ -1081,7 +1086,7 @@ export default function Index() {
   const hiddenIconStyleRight = useAnimatedStyle(() => {
     if (leftJoystickFinger.value !== -1) {
       return {
-        transform: [{ translateY: withTiming(-70, { duration: 150 }) }],
+        transform: [{ translateY: withTiming(scaledMinus70, { duration: 150 }) }],
       };
     } else {
       return { transform: [{ translateY: withTiming(0, { duration: 150 }) }] };
@@ -1117,8 +1122,8 @@ export default function Index() {
     const isActive = activeBtn === buttonName;
     const activeColor = '#979ca2a7';
     const inactiveColor = '#979ca200';
-    const basePadding = 20; // 40 / 2
-    const activePadding = basePadding + 7;
+    const basePadding = scaled20; // 40 / 2
+    const activePadding = basePadding + scaled7;
 
     return {
       position: 'absolute',
@@ -1186,7 +1191,7 @@ export default function Index() {
 
     // Dynamically scale the highlight ring based on the new MENU_BUTTON_SIZE constant
     const basePadding = MENU_BUTTON_SIZE / 2;
-    const activePadding = basePadding + 7; // Adds a 7px expanding ring around the edge
+    const activePadding = basePadding + scaled7; // Adds a 7px expanding ring around the edge
 
     return {
       position: 'absolute',
@@ -1402,13 +1407,13 @@ export default function Index() {
             >
               <Ionicons
                 name="game-controller-outline"
-                size={26}
+                size={scale(26)}
                 color={colors.cloudGamepadText}
               />
               {gamepadToggled && (
                 <SimpleLineIcons
                   name="ban"
-                  size={40}
+                  size={scale(40)}
                   color={colors.cloudGamepadText}
                   style={styles.banIcon}
                 />
@@ -1417,7 +1422,7 @@ export default function Index() {
 
             <Animated.View
               style={[
-                { flexDirection: 'row', alignItems: 'center', gap: 15 },
+                { flexDirection: 'row', alignItems: 'center', gap: scale(15) },
                 expandedContentStyle,
               ]}
             >
@@ -1430,7 +1435,7 @@ export default function Index() {
               >
                 <Ionicons
                   name="information-circle-outline"
-                  size={32}
+                  size={scale(32)}
                   color={colors.cloudGamepadText}
                 />
               </Pressable>
@@ -1444,7 +1449,7 @@ export default function Index() {
               >
                 <Ionicons
                   name="settings-outline"
-                  size={28}
+                  size={scale(28)}
                   color={colors.cloudGamepadText}
                 />
               </Pressable>
@@ -1456,21 +1461,25 @@ export default function Index() {
                   router.back();
                 }}
               >
-                <Ionicons name="exit-outline" size={32} color={colors.cloudGamepadText} />
+                <Ionicons
+                  name="exit-outline"
+                  size={scale(32)}
+                  color={colors.cloudGamepadText}
+                />
               </Pressable>
             </Animated.View>
 
             <Pressable
-              style={[styles.iconButton, { position: 'absolute', right: 10 }]}
+              style={[styles.iconButton, { position: 'absolute', right: scale(10) }]}
               onPress={() => {
                 isMenuExpanded.value = !isMenuExpanded.value;
               }}
             >
               <Animated.View style={closeIconStyle}>
-                <Ionicons name="close" size={32} color={colors.cloudGamepadText} />
+                <Ionicons name="close" size={scale(32)} color={colors.cloudGamepadText} />
               </Animated.View>
               <Animated.View style={hamburgerIconStyle}>
-                <Ionicons name="menu" size={32} color={colors.cloudGamepadText} />
+                <Ionicons name="menu" size={scale(32)} color={colors.cloudGamepadText} />
               </Animated.View>
             </Pressable>
           </Animated.View>
@@ -1585,7 +1594,7 @@ export default function Index() {
                         justifyContent: 'center',
                         alignItems: 'flex-start',
                         alignSelf: 'flex-start',
-                        gap: 40,
+                        gap: scale(40),
                         flex: 1,
                         marginTop: -1 * (MENU_BUTTON_SIZE + (-1 * height * 0.52) / 2), // Tweak this negative value to move it further up
                         // borderColor: 'black',
@@ -1613,7 +1622,7 @@ export default function Index() {
                       >
                         <Ionicons
                           name="albums-outline"
-                          size={20}
+                          size={scale(20)}
                           color={colors.cloudGamepadText}
                         />
                       </View>
@@ -1633,7 +1642,11 @@ export default function Index() {
                           backgroundColor: colors.cloudGamepadBase,
                         }}
                       >
-                        <Ionicons name="menu" size={20} color={colors.cloudGamepadText} />
+                        <Ionicons
+                          name="menu"
+                          size={scale(20)}
+                          color={colors.cloudGamepadText}
+                        />
                       </View>
                     </Animated.View>
                   </Animated.View>
@@ -1885,14 +1898,14 @@ const styles = StyleSheet.create({
   },
 
   r3l3: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: scale(60),
+    height: scale(60),
+    borderRadius: scale(30),
     // backgroundColor: 'blue',
     // alignSelf: 'center',
     justifyContent: 'center',
     alignItems: 'center',
-    transform: [{ translateY: 20 }],
+    transform: [{ translateY: scale(20) }],
   },
 
   r3l3iconParent: {
@@ -1901,9 +1914,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stickButtonInner: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
     backgroundColor: colors.cloudGamepadBase,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1911,10 +1924,10 @@ const styles = StyleSheet.create({
   stickButtonText: {
     textAlign: 'center',
     fontWeight: 'bold',
-    fontSize: 15,
-    width: 40,
-    height: 40,
-    lineHeight: 40,
+    fontSize: fontScale(15),
+    width: scale(40),
+    height: scale(40),
+    lineHeight: scale(40),
   },
   menuButtonContainer: {
     width: MENU_BUTTON_SIZE,
@@ -1929,7 +1942,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: scale(10),
   },
   urlBar: {
     borderRadius: 999,
@@ -1942,15 +1955,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 15,
+    paddingHorizontal: scale(10),
+    paddingVertical: scale(4),
+    gap: scale(15),
     overflow: 'hidden',
   },
   iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: scale(42),
+    height: scale(42),
+    borderRadius: scale(21),
     alignItems: 'center',
     justifyContent: 'center',
   },
