@@ -4,6 +4,7 @@ import { MotiView } from 'moti';
 
 import colors from '@/assets/images/colors';
 
+import { fontScale, scale } from '@/helper-functions/scaling';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -19,6 +20,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 function RippleRing({ slotIndex, rippleElapsed, rippleDuration, rippleInterval }) {
+  const scaled3 = scale(3);
+
   const rippleStyle = useAnimatedStyle(() => {
     const latestLaunchIndex = Math.floor(rippleElapsed.value / rippleInterval);
     const launchIndex = latestLaunchIndex - slotIndex;
@@ -47,7 +50,7 @@ function RippleRing({ slotIndex, rippleElapsed, rippleDuration, rippleInterval }
 
     return {
       opacity: interpolate(progress, [0, 1], [0.7, 0], Extrapolation.CLAMP),
-      borderWidth: interpolate(progress, [0, 1], [3, 0], Extrapolation.CLAMP),
+      borderWidth: interpolate(progress, [0, 1], [scaled3, 0], Extrapolation.CLAMP),
       transform: [
         {
           scale: interpolate(progress, [0, 1], [1.2, 2.5], Extrapolation.CLAMP),
@@ -62,7 +65,7 @@ function RippleRing({ slotIndex, rippleElapsed, rippleDuration, rippleInterval }
       style={[
         StyleSheet.absoluteFillObject,
         {
-          borderRadius: 100,
+          borderRadius: scale(100),
           borderColor: colors.triggerRipple,
         },
         rippleStyle,
@@ -78,8 +81,8 @@ export default function Trigger({
   triggerSide,
   triggerLength,
 }) {
-  const maxButtonOrbMovement = 25; // bigger = farther down when shoulder button is pressed
-  const maxTriggerOrbMovement = 25; // bigger = farther up when trigger is fully pulled
+  const maxButtonOrbMovement = scale(25); // bigger = farther down when shoulder button is pressed
+  const maxTriggerOrbMovement = scale(25); // bigger = farther up when trigger is fully pulled
   const rippleDuration = 1500;
   const rippleInterval = 2000;
   const rippleCount = 1; // Only 1 ripple happens
@@ -250,8 +253,8 @@ export default function Trigger({
           flex: 0.3,
           flexDirection: 'row',
           justifyContent: 'center',
-          padding: 40,
-          paddingHorizontal: 40,
+          padding: scale(40),
+          paddingHorizontal: scale(40),
 
           // backgroundColor: "powderblue",
           // alignItems: "flex-start",
@@ -260,9 +263,9 @@ export default function Trigger({
         <MotiView //for RT and LT
           style={[
             {
-              width: 40,
-              height: 40,
-              borderRadius: 50,
+              width: scale(40),
+              height: scale(40),
+              borderRadius: scale(50),
               alignItems: 'center',
               justifyContent: 'center',
               // backgroundColor: 'rgba(255, 255, 255,0.8)',
@@ -277,7 +280,7 @@ export default function Trigger({
           ]}
           from={{
             opacity: 0,
-            transform: [{ translateY: 20 }],
+            transform: [{ translateY: scale(20) }],
           }}
         >
           <MotiView
@@ -303,10 +306,10 @@ export default function Trigger({
               style={[
                 StyleSheet.absoluteFillObject,
                 {
-                  borderRadius: 100,
+                  borderRadius: scale(100),
                   borderColor: colors.triggerBorder,
                   opacity: 0.3,
-                  borderWidth: 2,
+                  borderWidth: scale(2),
                   transform: [{ scale: 1.4 }],
                 },
               ]}
@@ -315,18 +318,19 @@ export default function Trigger({
           {triggerSide === 'right' ? (
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <Animated.Text
+                allowFontScaling={false}
                 style={[
                   {
-                    fontSize: 10,
+                    fontSize: fontScale(10),
                     fontWeight: 'bold',
                     color: colors.cloudGamepadText,
                     textAlign: 'center',
-                    borderWidth: 2,
+                    borderWidth: scale(2),
                     borderColor: colors.triggerTextBorder,
-                    borderRadius: 999,
-                    width: 30,
-                    height: 30,
-                    lineHeight: 26,
+                    borderRadius: scale(999),
+                    width: scale(30),
+                    height: scale(30),
+                    lineHeight: scale(26),
                   },
                   triggerTextVisible,
                 ]}
@@ -334,19 +338,20 @@ export default function Trigger({
                 RT
               </Animated.Text>
               <Animated.Text
+                allowFontScaling={false}
                 style={[
                   {
-                    fontSize: 10,
+                    fontSize: fontScale(10),
                     fontWeight: 'bold',
                     color: colors.cloudGamepadText,
                     position: 'absolute',
                     textAlign: 'center',
-                    borderWidth: 2,
+                    borderWidth: scale(2),
                     borderColor: colors.triggerTextBorder,
-                    borderRadius: 999,
-                    width: 30,
-                    height: 30,
-                    lineHeight: 26,
+                    borderRadius: scale(999),
+                    width: scale(30),
+                    height: scale(30),
+                    lineHeight: scale(26),
                   },
                   buttonTextVisible,
                 ]}
@@ -357,18 +362,19 @@ export default function Trigger({
           ) : (
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <Animated.Text
+                allowFontScaling={false}
                 style={[
                   {
-                    fontSize: 10,
+                    fontSize: fontScale(10),
                     fontWeight: 'bold',
                     color: colors.cloudGamepadText,
                     textAlign: 'center',
-                    borderWidth: 2,
+                    borderWidth: scale(2),
                     borderColor: colors.triggerTextBorder,
-                    borderRadius: 999,
-                    width: 30,
-                    height: 30,
-                    lineHeight: 26,
+                    borderRadius: scale(999),
+                    width: scale(30),
+                    height: scale(30),
+                    lineHeight: scale(26),
                   },
                   triggerTextVisible,
                 ]}
@@ -376,19 +382,20 @@ export default function Trigger({
                 LT
               </Animated.Text>
               <Animated.Text
+                allowFontScaling={false}
                 style={[
                   {
-                    fontSize: 10,
+                    fontSize: fontScale(10),
                     fontWeight: 'bold',
                     color: colors.cloudGamepadText,
                     position: 'absolute',
                     textAlign: 'center',
-                    borderWidth: 2,
+                    borderWidth: scale(2),
                     borderColor: colors.triggerTextBorder,
-                    borderRadius: 999,
-                    width: 30,
-                    height: 30,
-                    lineHeight: 26,
+                    borderRadius: scale(999),
+                    width: scale(30),
+                    height: scale(30),
+                    lineHeight: scale(26),
                   },
                   buttonTextVisible,
                 ]}
@@ -410,8 +417,8 @@ const styles = StyleSheet.create({
   },
   upperInnerContainer: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingVertical: 25,
+    paddingHorizontal: scale(15),
+    paddingVertical: scale(25),
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
@@ -423,9 +430,9 @@ const styles = StyleSheet.create({
     // alignItems: "center",
   },
   triggerPullIndicator: {
-    width: 10,
-    height: 30,
-    borderRadius: 1,
+    width: scale(10),
+    height: scale(30),
+    borderRadius: scale(1),
     opacity: 0,
   },
   centerCluster: {
@@ -435,7 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingTop: 80,
+    paddingTop: scale(80),
   },
   buttonsContainer: {
     // flex: 1,
@@ -443,7 +450,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'pink',
-    padding: 20,
+    padding: scale(20),
     // height: 100,
     // width: 100,
   },

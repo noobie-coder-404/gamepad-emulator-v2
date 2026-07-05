@@ -23,8 +23,8 @@ const colors = {
   triggerBorder: '#c1c7ce00',
   triggerTextBorder: '#ffffff',
 
-  joystickKnob: '#c1c7ce',
-  joystickBorder: '#868a8e',
+  joystickKnob: '#9da2a7a4',
+  joystickBorder: '#9b9c9e98',
   clusterHighlight: '#979ca2a7',
   clusterAnchor: '#979ca2a7',
   clusterCenter: '#979ca2',

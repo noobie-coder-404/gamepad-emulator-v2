@@ -1,12 +1,14 @@
 import { StyleSheet, View } from 'react-native';
 
 import colors from '@/assets/images/colors';
+import { scale } from '@/helper-functions/scaling';
 import Animated, {
   measure,
   runOnUI,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
+
 export default function Joystick({
   joystick,
   floatingStickCenter,
@@ -99,20 +101,20 @@ export default function Joystick({
 
 const joystickStyles = StyleSheet.create({
   knob: {
-    borderRadius: 50,
-    height: 45,
-    width: 45,
+    borderRadius: scale(50),
+    height: scale(45),
+    width: scale(45),
     backgroundColor: colors.joystickKnob,
   },
   outerCircle: {
-    borderRadius: 50,
-    height: 90,
-    width: 90,
+    borderRadius: scale(50),
+    height: scale(90),
+    width: scale(90),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff00',
     borderColor: colors.joystickBorder,
-    borderWidth: 4,
+    borderWidth: scale(4),
   },
   container: {
     flex: 1,

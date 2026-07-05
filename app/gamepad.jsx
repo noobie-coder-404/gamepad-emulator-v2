@@ -38,6 +38,7 @@ import Animated, {
   useAnimatedRef,
   useAnimatedStyle,
   useDerivedValue,
+  useFrameCallback,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -133,6 +134,8 @@ export default function Index() {
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [trackpadMode, setTrackpadMode] = useState(true);
   const trackpadModeSV = useSharedValue(true);
+  const [buttonAlignmentSetting, setButtonAlignmentSetting] = useState('cross');
+  const buttonAlignment = useSharedValue('cross');
   const [gain, setGain] = useState(1.5);
   const gainSV = useSharedValue(1.5);
   const [sensitivity, setSensitivity] = useState(10);
@@ -152,6 +155,12 @@ export default function Index() {
           const val = JSON.parse(savedTrackpadMode);
           setTrackpadMode(val);
           trackpadModeSV.value = val;
+        }
+        const savedButtonAlignment = await AsyncStorage.getItem('buttonAlignment');
+        if (savedButtonAlignment !== null) {
+          const val = JSON.parse(savedButtonAlignment);
+          setButtonAlignmentSetting(val);
+          buttonAlignment.value = val;
         }
         const savedGain = await AsyncStorage.getItem('gain');
         if (savedGain !== null) {
@@ -180,6 +189,10 @@ export default function Index() {
       AsyncStorage.setItem('trackpadMode', JSON.stringify(trackpadModeSV.value)).catch(
         console.error
       );
+      AsyncStorage.setItem(
+        'buttonAlignment',
+        JSON.stringify(buttonAlignment.value)
+      ).catch(console.error);
       AsyncStorage.setItem('gain', JSON.stringify(gainSV.value)).catch(console.error);
       AsyncStorage.setItem(
         'trackpadSensitivity',
@@ -323,6 +336,8 @@ export default function Index() {
   const leftFloatingStickCenter = useSharedValue({ x: 0, y: 0 });
   const rightKnobOffset = useSharedValue({ x: 0, y: 0 }); //calculated with floating joystick center as origin
   const leftKnobOffset = useSharedValue({ x: 0, y: 0 });
+  // Timestamp of the latest right-stick movement event in swiping mode.
+  const lastIteration = useSharedValue(0);
 
   const trackpad = useAnimatedRef();
   const currentTrackpadInfo = useSharedValue(null);
@@ -457,6 +472,21 @@ export default function Index() {
     console.log(`cancellation packet for ${toBeCancelled} : ${packet}`);
     return packet;
   };
+
+  // iOS stops sending touch-move events when a finger becomes stationary.
+  // Check independently on the UI thread so the last velocity cannot remain stuck.
+  useFrameCallback(() => {
+    if (
+      trackpadModeSV.value &&
+      rightJoystickFinger.value !== -1 &&
+      performance.now() - lastIteration.value > 17 &&
+      (rightKnobOffset.value.x !== 0 || rightKnobOffset.value.y !== 0)
+    ) {
+      rightKnobOffset.value = { x: 0, y: 0 };
+      const cancellationPacket = getCancellationPacket('right stick');
+      runOnJS(sendNativePacket)(cancellationPacket);
+    }
+  });
 
   const isActive = useSharedValue(false);
 
@@ -788,6 +818,8 @@ export default function Index() {
                   // vy: currentVy,
                 };
               }
+              // The frame callback uses this to detect when swiping has stopped.
+              lastIteration.value = performance.now();
             }
 
             // console.log(rightKnobOffset.value);
@@ -1070,6 +1102,24 @@ export default function Index() {
         isFacePadActive.value || isDpadActive.value
           ? 0
           : withTiming(1, { duration: 200 }),
+    };
+  });
+
+  const selectButtonDisappearingStyle = useAnimatedStyle(() => {
+    return {
+      opacity:
+        buttonAlignment.value === 'rays' && leftJoystickFinger.value !== -1
+          ? withTiming(0, { duration: 150 })
+          : withTiming(1, { duration: 150 }),
+    };
+  });
+
+  const startButtonDisappearingStyle = useAnimatedStyle(() => {
+    return {
+      opacity:
+        buttonAlignment.value === 'rays' && rightJoystickFinger.value !== -1
+          ? withTiming(0, { duration: 150 })
+          : withTiming(1, { duration: 150 }),
     };
   });
 
@@ -1363,6 +1413,10 @@ export default function Index() {
   }));
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const raysButtonClusterTranslateStyle = {
+    transform: [{ translateY: buttonAlignmentSetting === 'rays' ? scale(40) : 0 }],
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar hidden={true} />
@@ -1492,7 +1546,7 @@ export default function Index() {
             style={{
               flex: 1,
               flexDirection: 'column',
-              // backgroundColor: "#0e0e0ecc",
+              // backgroundColor: '#0e0e0ecc',
             }}
           >
             {/* upper half of the screen that contains triggers */}
@@ -1536,6 +1590,7 @@ export default function Index() {
                   <View style={styles.stickButtonInner}>
                     {/* <L3Icon width={40} height={40} ref={leftL3} color={iconColor} /> */}
                     <Animated.Text
+                      allowFontScaling={false}
                       ref={leftL3}
                       style={[styles.stickButtonText, { color: iconColor }]}
                     >
@@ -1556,6 +1611,7 @@ export default function Index() {
                   <View style={styles.stickButtonInner}>
                     {/* <R3Icon width={40} height={40} ref={leftR3} color={iconColor} /> */}
                     <Animated.Text
+                      allowFontScaling={false}
                       ref={leftR3}
                       style={[styles.stickButtonText, { color: iconColor }]}
                     >
@@ -1575,8 +1631,18 @@ export default function Index() {
                   />
                 </Animated.View>
 
-                <View style={styles.centerCluster}>
-                  <Animated.View style={leftDisappearingCluster}>
+                <View
+                  style={[
+                    styles.centerCluster,
+                    {
+                      alignItems:
+                        buttonAlignmentSetting === 'rays' ? 'flex-end' : 'center',
+                    },
+                  ]}
+                >
+                  <Animated.View
+                    style={[raysButtonClusterTranslateStyle, leftDisappearingCluster]}
+                  >
                     <Buttons
                       buttons={dPadButtons}
                       cluster={dPad}
@@ -1584,6 +1650,7 @@ export default function Index() {
                       dPadButtonsMeasurements={dPadButtonsMeasurements}
                       activeButton={activeDpadButton}
                       clusterType={'dpad'}
+                      buttonAlignment={buttonAlignment}
                     />
                     {/* Select button correctly placed under D-Pad */}
                   </Animated.View>
@@ -1594,9 +1661,12 @@ export default function Index() {
                         justifyContent: 'center',
                         alignItems: 'flex-start',
                         alignSelf: 'flex-start',
-                        gap: scale(40),
+                        gap: scale(buttonAlignmentSetting === 'rays' ? 500 : 300),
                         flex: 1,
-                        marginTop: -1 * (MENU_BUTTON_SIZE + (-1 * height * 0.52) / 2), // Tweak this negative value to move it further up
+                        marginTop: Math.min(
+                          height * 0.325 - MENU_BUTTON_SIZE,
+                          height / 4.4 + 50 - MENU_BUTTON_SIZE - scale(10)
+                        ), // Clamps the margin so buttons never go below the bottom edge of the screen
                         // borderColor: 'black',
                         // borderWidth: 2,
                         // maginBottom: 180,
@@ -1606,7 +1676,7 @@ export default function Index() {
                     ]}
                   >
                     <Animated.View
-                      style={styles.menuButtonContainer}
+                      style={[styles.menuButtonContainer, selectButtonDisappearingStyle]}
                       ref={selectButtonRef}
                     >
                       <Animated.View style={selectHighlight} />
@@ -1628,7 +1698,7 @@ export default function Index() {
                       </View>
                     </Animated.View>
                     <Animated.View
-                      style={styles.menuButtonContainer}
+                      style={[styles.menuButtonContainer, startButtonDisappearingStyle]}
                       ref={startButtonRef}
                     >
                       <Animated.View style={startHighlight} />
@@ -1650,7 +1720,9 @@ export default function Index() {
                       </View>
                     </Animated.View>
                   </Animated.View>
-                  <Animated.View style={rightDisappearingCluster}>
+                  <Animated.View
+                    style={[raysButtonClusterTranslateStyle, rightDisappearingCluster]}
+                  >
                     <Buttons
                       buttons={faceButtons}
                       cluster={facePad}
@@ -1658,6 +1730,7 @@ export default function Index() {
                       faceButtonsMeasurements={faceButtonsMeasurements}
                       activeButton={activeFaceButton}
                       clusterType={'facepad'}
+                      buttonAlignment={buttonAlignment}
                     />
                     {/* Start button correctly placed under Facepad */}
                   </Animated.View>
@@ -1689,6 +1762,7 @@ export default function Index() {
                   <View style={styles.stickButtonInner}>
                     {/* <R3Icon width={40} height={40} ref={rightR3} color={iconColor} /> */}
                     <Animated.Text
+                      allowFontScaling={false}
                       ref={rightR3}
                       style={[styles.stickButtonText, { color: iconColor }]}
                     >
@@ -1709,6 +1783,7 @@ export default function Index() {
                   <View style={styles.stickButtonInner}>
                     {/* <L3Icon ref={rightL3} width={40} height={40} color={iconColor} /> */}
                     <Animated.Text
+                      allowFontScaling={false}
                       ref={rightL3}
                       style={[styles.stickButtonText, { color: iconColor }]}
                     >
@@ -1775,6 +1850,50 @@ export default function Index() {
                     ]}
                   >
                     Joystick
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>D-pad / ABXY Alignment</Text>
+              <View style={styles.segmentedControl}>
+                <Pressable
+                  style={[
+                    styles.segmentButton,
+                    buttonAlignmentSetting === 'rays' && styles.segmentActive,
+                  ]}
+                  onPress={() => {
+                    setButtonAlignmentSetting('rays');
+                    buttonAlignment.value = 'rays';
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      buttonAlignmentSetting === 'rays' && styles.segmentTextActive,
+                    ]}
+                  >
+                    Rays
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.segmentButton,
+                    buttonAlignmentSetting === 'cross' && styles.segmentActive,
+                  ]}
+                  onPress={() => {
+                    setButtonAlignmentSetting('cross');
+                    buttonAlignment.value = 'cross';
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      buttonAlignmentSetting === 'cross' && styles.segmentTextActive,
+                    ]}
+                  >
+                    Cross
                   </Text>
                 </Pressable>
               </View>
@@ -1850,11 +1969,12 @@ export default function Index() {
         onClose={() => setOnboardingVisible(false)}
       />
 
-      {/* Render up to 5 multi-touch indicators */}
+      {/* Render up to 5 multi-touch indicators
       {isTouchVisible &&
+        false && // to disable this feature
         [0, 1, 2, 3, 4].map((i) => (
           <TouchCursor key={i} index={i} debugTouches={debugTouches} />
-        ))}
+        ))} */}
     </GestureHandlerRootView>
   );
 }
@@ -1878,20 +1998,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 40,
+    // maxHeight: 250,
   },
 
   centerCluster: {
     flexDirection: 'row',
-
-    minWidth: 260,
+    // maxWidth: '30%',
+    minWidth: scale(360), // Increase this number to make the center box wider
     height: 100,
     // backgroundColor: 'blue',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    // alignItems: 'flex-end',
   },
 
   centerWrapper: {
-    gap: 60,
+    gap: 80,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1905,7 +2027,7 @@ const styles = StyleSheet.create({
     // alignSelf: 'center',
     justifyContent: 'center',
     alignItems: 'center',
-    transform: [{ translateY: scale(20) }],
+    transform: [{ translateY: scale(50) }],
   },
 
   r3l3iconParent: {

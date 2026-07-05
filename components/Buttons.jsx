@@ -24,6 +24,7 @@ export default function Buttons({
   isClusterActive,
   activeButton,
   clusterType, // 2 possible values - 'facepad' or 'dpad'
+  buttonAlignment, // 2 possible values - 'rays' or 'cross'
 }) {
   const { mode, setMode } = useMode();
 
@@ -134,6 +135,8 @@ export default function Buttons({
   // safely passed into the Reanimated UI worklets below!
   const scaled75 = scale(75);
   const scaled17 = scale(17);
+  const scaled35 = scale(35);
+  const scaled102 = scale(102);
 
   const buttonStyles = (direction, isActive, activeButton) => {
     'worklet';
@@ -176,7 +179,29 @@ export default function Buttons({
       'right-down': { x: 1, y: 1 },
     };
 
-    const coords = directionMap[direction] || { x: 0, y: 0 };
+    let coords = directionMap[direction] || { x: 0, y: 0 };
+
+    // Standalone experimental rays layout. Delete this block to fully remove rays.
+    if (buttonAlignment?.value === 'rays') {
+      const rayCoords =
+        clusterType === 'dpad'
+          ? {
+              left: { x: -1.35, y: 0 },
+              up: { x: -0.675, y: -1.169 },
+              down: { x: 0.675, y: -1.169 },
+              right: { x: 1.35, y: 0 },
+              center: { x: 0, y: 0 },
+            }
+          : {
+              down: { x: -1.35, y: 0 },
+              right: { x: -0.675, y: -1.169 },
+              left: { x: 0.675, y: -1.169 },
+              up: { x: 1.35, y: 0 },
+              center: { x: 0, y: 0 },
+            };
+
+      coords = rayCoords[direction] || coords;
+    }
 
     return {
       transform: [
@@ -279,17 +304,42 @@ export default function Buttons({
       right: '0deg',
       left: '180deg',
     };
-    const rotateValue = rotateAngle[buttonDirectionMap[activeButton.value]];
+    let rotateValue = rotateAngle[buttonDirectionMap[activeButton.value]];
+    let barWidth = scaled35;
+    let barCenterOffset = scaled17;
+
+    // Standalone experimental rays layout. Delete this block to fully remove rays.
+    if (buttonAlignment?.value === 'rays') {
+      const rayAngles =
+        clusterType === 'dpad'
+          ? {
+              left: '180deg',
+              up: '240deg',
+              down: '300deg',
+              right: '0deg',
+            }
+          : {
+              down: '180deg',
+              right: '240deg',
+              left: '300deg',
+              up: '0deg',
+            };
+
+      rotateValue = rayAngles[buttonDirectionMap[activeButton.value]] || rotateValue;
+      barWidth = scaled102;
+      barCenterOffset = scaled102 / 2;
+    }
     // console.log('active button in styles: ', activeButton.value)
     // console.log('inside directionbar: ',rotateValue)
 
     return {
+      width: withTiming(barWidth, { duration: 100 }),
       transformOrigin: 'left center',
       opacity: activeButton.value ? 1 : 0,
       transform: [
         // {scaleX: 50},
         // {scaleY: 5},
-        { translateX: scaled17 },
+        { translateX: withTiming(barCenterOffset, { duration: 100 }) },
         { rotate: activeButton.value ? rotateValue : '0deg' },
       ],
     };
@@ -308,7 +358,6 @@ export default function Buttons({
     <Animated.View style={styles.buttonsContainer} ref={cluster}>
       <Animated.View
         style={[
-          directionBar,
           {
             width: scale(35), //used to be 70
             height: scale(5),
@@ -316,6 +365,7 @@ export default function Buttons({
             position: 'absolute',
             backgroundColor: activeOptionColor,
           },
+          directionBar,
         ]}
       ></Animated.View>
       <Animated.View
