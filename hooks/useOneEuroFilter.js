@@ -1,3 +1,95 @@
+// // this uses raw - previous filtered value
+
+// import { useSharedValue } from 'react-native-reanimated';
+
+// export const useOneEuroFilter = (
+//   initialFreq = 60,
+//   minCutoff = 1.0,
+//   beta = 0.0,
+//   dCutoff = 1.0
+// ) => {
+//   // REMOVED 'worklet' from here. This hook runs on the JS thread.
+
+//   // Using individual shared values is much faster than object mutation in worklets
+//   const freq = useSharedValue(initialFreq);
+//   const lasttime = useSharedValue(null);
+
+//   // LPF state for signal (x)
+//   const xS = useSharedValue(0);
+//   const xInitialized = useSharedValue(false);
+
+//   // LPF state for derivative (dx)
+//   const dxS = useSharedValue(0);
+//   const dxInitialized = useSharedValue(false);
+
+//   const filter = (value, timestamp = null) => {
+//     'worklet'; // Keep this! The inner function IS a worklet.
+
+//     // 1. Update frequency
+//     if (lasttime.value !== null && timestamp !== null) {
+//       const diffInSeconds = (timestamp - lasttime.value) / 1000.0;
+//       if (diffInSeconds > 0) {
+//         freq.value = 1.0 / diffInSeconds;
+//       }
+//     }
+//     lasttime.value = timestamp;
+
+//     // Helper: Alpha calculation
+//     const getAlpha = (cutoff) => {
+//       const te = 1.0 / freq.value;
+//       const tau = 1.0 / (2 * Math.PI * cutoff);
+//       return 1.0 / (1.0 + tau / te);
+//     };
+
+//     // 2. Calculate Derivative (Velocity)
+//     // Canonical 1€ filter compares raw input to the *previous filtered* output.
+//     // On frame 1 (xInitialized false), dvalue is 0 — this lets the derivative
+//     // filter itself get initialized on frame 1 too, avoiding a jolt on frame 2.
+//     const dvalue = xInitialized.value ? (value - xS.value) * freq.value : 0.0;
+
+//     // 3. Filter Derivative
+//     const dAlpha = getAlpha(dCutoff);
+//     let edvalue;
+//     if (dxInitialized.value) {
+//       edvalue = dAlpha * dvalue + (1.0 - dAlpha) * dxS.value;
+//     } else {
+//       edvalue = dvalue;
+//       dxInitialized.value = true;
+//     }
+//     dxS.value = edvalue;
+
+//     // 4. Calculate Adaptive Cutoff
+//     const cutoff = minCutoff + beta * Math.abs(edvalue);
+
+//     // 5. Filter Value
+//     const alpha = getAlpha(cutoff);
+//     let result;
+//     if (xInitialized.value) {
+//       result = alpha * value + (1.0 - alpha) * xS.value;
+//     } else {
+//       result = value;
+//       xInitialized.value = true;
+//     }
+//     xS.value = result;
+
+//     return result;
+//   };
+
+//   const reset = () => {
+//     'worklet';
+//     freq.value = initialFreq;
+//     lasttime.value = null;
+//     xS.value = 0;
+//     xInitialized.value = false;
+//     dxS.value = 0;
+//     dxInitialized.value = false;
+//   };
+
+//   return { filter, reset };
+// };
+
+// this uses raw value - previous raw value
+
 import { useSharedValue } from 'react-native-reanimated';
 
 export const useOneEuroFilter = (
@@ -15,6 +107,8 @@ export const useOneEuroFilter = (
   // LPF state for signal (x)
   const xS = useSharedValue(0);
   const xInitialized = useSharedValue(false);
+  const lastRaw = useSharedValue(0);
+  const rawInitialized = useSharedValue(false);
 
   // LPF state for derivative (dx)
   const dxS = useSharedValue(0);
@@ -40,7 +134,12 @@ export const useOneEuroFilter = (
     };
 
     // 2. Calculate Derivative (Velocity)
-    const dvalue = xInitialized.value ? (value - xS.value) * freq.value : 0.0;
+    // Old version compared raw input to the previous filtered output:
+    // const dvalue = xInitialized.value ? (value - xS.value) * freq.value : 0.0;
+    // The canonical 1 Euro derivative uses the previous raw input instead.
+    const dvalue = rawInitialized.value ? (value - lastRaw.value) * freq.value : 0.0;
+    lastRaw.value = value;
+    rawInitialized.value = true;
 
     // 3. Filter Derivative
     const dAlpha = getAlpha(dCutoff);
@@ -76,6 +175,8 @@ export const useOneEuroFilter = (
     lasttime.value = null;
     xS.value = 0;
     xInitialized.value = false;
+    lastRaw.value = 0;
+    rawInitialized.value = false;
     dxS.value = 0;
     dxInitialized.value = false;
   };
@@ -83,7 +184,6 @@ export const useOneEuroFilter = (
   return { filter, reset };
 };
 
-// import { useSharedValue } from 'react-native-reanimated';
 // /**
 //  * Reanimated 1€ Filter Hook
 //  * Optimized for [performance.now](http://performance.now)() (milliseconds)
@@ -94,7 +194,6 @@ export const useOneEuroFilter = (
 //   beta = 0.0,
 //   dCutoff = 1.0
 // ) => {
-
 //   // Internal state stored in a Shared Value for UI thread persistence
 //   const filterState = useSharedValue({
 //     freq: initialFreq,

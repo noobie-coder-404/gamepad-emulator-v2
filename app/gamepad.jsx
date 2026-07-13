@@ -14,6 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -75,6 +77,19 @@ const continuousMode = false; // trigger and button can be controlled without li
 //proper continuous mode is yet to be implemented because that would require adding a deadzone
 const triggerLength = 70;
 const MENU_BUTTON_SIZE = scale(36);
+const SMALL_SCREEN_HEIGHT = 500; // Below this landscape height, the phone layout gives extra space to controls.
+const LARGE_SCREEN_HEIGHT = 700; // Above this landscape height, tablet layout gives extra space to triggers.
+const SMALL_SCREEN_UPPER_FLEX = 0.85; // Upper trigger/webview area flex on short phone-height screens.
+const NORMAL_SCREEN_UPPER_FLEX = 1.2; // Upper trigger/webview area flex on the reference/default layout.
+const LARGE_SCREEN_UPPER_FLEX = 1.45; // Upper trigger/webview area flex on tall tablet/iPad-height screens.
+const SMALL_SCREEN_LOWER_FLEX = 1.15; // Lower joystick/d-pad/ABXY area flex on short phone-height screens.
+const NORMAL_SCREEN_LOWER_FLEX = 1; // Lower joystick/d-pad/ABXY area flex on the reference/default layout.
+const LARGE_SCREEN_LOWER_FLEX = 0.75; // Lower joystick/d-pad/ABXY area flex on tall tablet/iPad-height screens.
+const WIDE_SCREEN_WIDTH = 1000; // Screen width where extra horizontal spacing starts for wide layouts.
+const WIDE_CENTER_CLUSTER_WIDTH_RATIO = 0.5; // Portion of screen width used for d-pad/start-view/ABXY spacing.
+const WIDE_CENTER_BUTTONS_GAP_SCALE = 0.8; // Extra multiplier for start/view button gap on wide layouts.
+const RAYS_CENTER_BUTTONS_GAP = 500; // Start/view gap used by rays mode; now also used by cross for consistent positioning.
+const CROSS_CENTER_BUTTONS_GAP = 300; // Old cross-mode start/view gap. Kept commented below for easy rollback.
 
 // Temporary component to display touches for video recording
 const TouchCursor = ({ index, debugTouches }) => {
@@ -128,10 +143,12 @@ export default function Index() {
   const websiteUrl = Array.isArray(url) ? url[0] : url;
 
   const { width, height } = useWindowDimensions();
+  console.log('gamepad window dimensions', { width, height });
   const { mode, setMode } = useMode();
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
+  const [gamepadToggled, setGamepadToggled] = useState(false);
   const [trackpadMode, setTrackpadMode] = useState(true);
   const trackpadModeSV = useSharedValue(true);
   const [buttonAlignmentSetting, setButtonAlignmentSetting] = useState('cross');
@@ -140,6 +157,33 @@ export default function Index() {
   const gainSV = useSharedValue(1.5);
   const [sensitivity, setSensitivity] = useState(10);
   const sensitivitySV = useSharedValue(10);
+
+  const triggerButtonHaptic = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  // Standalone auto-hide feature. Delete this block and the timestamp updates
+  // in manualGesture to remove auto-hide.
+  const AUTO_HIDE_DELAY_MS = 20000;
+  const lastGamepadActivityTime = useSharedValue(performance.now());
+  const gamepadToggledSV = useSharedValue(false);
+  const settingsVisibleSV = useSharedValue(false);
+  const onboardingVisibleSV = useSharedValue(false);
+
+  useEffect(() => {
+    gamepadToggledSV.value = gamepadToggled;
+    if (gamepadToggled) {
+      lastGamepadActivityTime.value = performance.now();
+    }
+  }, [gamepadToggled, gamepadToggledSV, lastGamepadActivityTime]);
+
+  useEffect(() => {
+    settingsVisibleSV.value = settingsVisible;
+  }, [settingsVisible, settingsVisibleSV]);
+
+  useEffect(() => {
+    onboardingVisibleSV.value = onboardingVisible;
+  }, [onboardingVisible, onboardingVisibleSV]);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -164,7 +208,7 @@ export default function Index() {
         }
         const savedGain = await AsyncStorage.getItem('gain');
         if (savedGain !== null) {
-          const val = JSON.parse(savedGain);
+          const val = Number(JSON.parse(savedGain));
           setGain(val);
           gainSV.value = val;
         }
@@ -316,6 +360,8 @@ export default function Index() {
 
   const buttonPressRight = useSharedValue(0);
   const buttonPressLeft = useSharedValue(0);
+  const leftTriggerMaxHapticFired = useSharedValue(false);
+  const rightTriggerMaxHapticFired = useSharedValue(false);
 
   // We use these to "remember" the start of the pull
   const leftInitialY = useSharedValue(0);
@@ -488,16 +534,30 @@ export default function Index() {
     }
   });
 
+  // Standalone auto-hide feature. Hides once after 20s of no gamepad touch activity.
+  useFrameCallback(() => {
+    if (!gamepadToggledSV.value) return;
+    if (settingsVisibleSV.value || onboardingVisibleSV.value || isMenuExpanded.value)
+      return;
+
+    if (performance.now() - lastGamepadActivityTime.value > AUTO_HIDE_DELAY_MS) {
+      gamepadToggledSV.value = false;
+      runOnJS(setGamepadToggled)(false);
+    }
+  });
+
   const isActive = useSharedValue(false);
 
   const manualGesture = Gesture.Manual()
     .onTouchesDown((e, manager) => {
+      lastGamepadActivityTime.value = performance.now();
+
       // Update tutorial overlay points
-      debugTouches.value = e.allTouches.map((t) => ({
-        id: t.id,
-        x: t.absoluteX,
-        y: t.absoluteY,
-      }));
+      // debugTouches.value = e.allTouches.map((t) => ({
+      //   id: t.id,
+      //   x: t.absoluteX,
+      //   y: t.absoluteY,
+      // }));
 
       manager.activate();
       if (isMenuExpanded.value) {
@@ -515,6 +575,7 @@ export default function Index() {
           console.log('select button touched');
           selectButtonFinger.value = touch.id;
           selectButton.value = 1;
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[12] = 1; // 12th index for Select
           runOnJS(sendNativePacket)(packet);
@@ -526,6 +587,7 @@ export default function Index() {
           console.log('start button touched');
           startButtonFinger.value = touch.id;
           startButton.value = 1;
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[13] = 1; // 13th index for Start
           runOnJS(sendNativePacket)(packet);
@@ -570,6 +632,7 @@ export default function Index() {
           l3Finger.value = touch.id;
           isL3Active.value = 1;
           activeStickButton.value = 'leftL3';
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[10] = 1;
           runOnJS(sendNativePacket)(packet);
@@ -577,6 +640,7 @@ export default function Index() {
           r3Finger.value = touch.id;
           isR3Active.value = 1;
           activeStickButton.value = 'leftR3';
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[11] = 1;
           runOnJS(sendNativePacket)(packet);
@@ -584,6 +648,7 @@ export default function Index() {
           r3Finger.value = touch.id;
           isR3Active.value = 1;
           activeStickButton.value = 'rightR3';
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[11] = 1;
           runOnJS(sendNativePacket)(packet);
@@ -591,6 +656,7 @@ export default function Index() {
           l3Finger.value = touch.id;
           isL3Active.value = 1;
           activeStickButton.value = 'rightL3';
+          runOnJS(triggerButtonHaptic)();
           const packet = [...currentSnapshot.value];
           packet[10] = 1;
           runOnJS(sendNativePacket)(packet);
@@ -599,15 +665,17 @@ export default function Index() {
           const currentTime = performance.now();
           const x = filterX.filter(touch.absoluteX, currentTime);
           const y = filterY.filter(touch.absoluteY, currentTime);
-          filterX.filter(touch.absoluteX, currentTime);
-          filterY.filter(touch.absoluteY, currentTime);
-          filterX.filter(touch.absoluteX, currentTime);
-          filterY.filter(touch.absoluteY, currentTime);
-          filterX.filter(touch.absoluteX, currentTime);
-          filterY.filter(touch.absoluteY, currentTime);
+          // filterX.filter(touch.absoluteX, currentTime);
+          // filterY.filter(touch.absoluteY, currentTime);
+          // filterX.filter(touch.absoluteX, currentTime);
+          // filterY.filter(touch.absoluteY, currentTime);
+          // filterX.filter(touch.absoluteX, currentTime);
+          // filterY.filter(touch.absoluteY, currentTime);
           currentTrackpadInfo.value = {
             x: x,
             y: y,
+            // x: touch.absoluteX,
+            // y: touch.absoluteY,
             time: currentTime,
             vx: 0,
             vy: 0,
@@ -617,12 +685,14 @@ export default function Index() {
       });
     })
     .onTouchesMove((e, manager) => {
+      lastGamepadActivityTime.value = performance.now();
+
       // Update tutorial overlay points
-      debugTouches.value = e.allTouches.map((t) => ({
-        id: t.id,
-        x: t.absoluteX,
-        y: t.absoluteY,
-      }));
+      // debugTouches.value = e.allTouches.map((t) => ({
+      //   id: t.id,
+      //   x: t.absoluteX,
+      //   y: t.absoluteY,
+      // }));
 
       //todo- too many if else-if else statements - turn into switch
       e.allTouches.forEach((touch) => {
@@ -635,6 +705,7 @@ export default function Index() {
             // triggerPullLeft.value = withSpring(0);
             triggerPullLeft.value = 0;
             buttonPressLeft.value = 0;
+            leftTriggerMaxHapticFired.value = false;
             leftShoulderMode.value = null;
             leftFinger.value = -1;
           } else {
@@ -656,14 +727,29 @@ export default function Index() {
             }
 
             if (leftShoulderMode.value === 'trigger') {
-              triggerPullLeft.value = clampTriggerPull(diff);
+              const nextTriggerPull = clampTriggerPull(diff);
+              triggerPullLeft.value = nextTriggerPull;
               buttonPressLeft.value = 0;
+              if (nextTriggerPull >= triggerLength) {
+                if (!leftTriggerMaxHapticFired.value) {
+                  leftTriggerMaxHapticFired.value = true;
+                  runOnJS(triggerButtonHaptic)();
+                }
+              } else {
+                leftTriggerMaxHapticFired.value = false;
+              }
             } else if (leftShoulderMode.value === 'button') {
+              const wasButtonPressed = buttonPressLeft.value === 1;
               triggerPullLeft.value = 0;
               buttonPressLeft.value = diff < 0 ? 1 : 0;
+              leftTriggerMaxHapticFired.value = false;
+              if (!wasButtonPressed && buttonPressLeft.value === 1) {
+                runOnJS(triggerButtonHaptic)();
+              }
             } else {
               triggerPullLeft.value = 0;
               buttonPressLeft.value = 0;
+              leftTriggerMaxHapticFired.value = false;
             }
           }
         } else if (touch.id === rightFinger.value) {
@@ -674,6 +760,7 @@ export default function Index() {
             // triggerPullRight.value = withSpring(0);
             triggerPullRight.value = 0;
             buttonPressRight.value = 0;
+            rightTriggerMaxHapticFired.value = false;
             rightShoulderMode.value = null;
             rightFinger.value = -1;
           } else {
@@ -694,14 +781,29 @@ export default function Index() {
             }
 
             if (rightShoulderMode.value === 'trigger') {
-              triggerPullRight.value = clampTriggerPull(diff);
+              const nextTriggerPull = clampTriggerPull(diff);
+              triggerPullRight.value = nextTriggerPull;
               buttonPressRight.value = 0;
+              if (nextTriggerPull >= triggerLength) {
+                if (!rightTriggerMaxHapticFired.value) {
+                  rightTriggerMaxHapticFired.value = true;
+                  runOnJS(triggerButtonHaptic)();
+                }
+              } else {
+                rightTriggerMaxHapticFired.value = false;
+              }
             } else if (rightShoulderMode.value === 'button') {
+              const wasButtonPressed = buttonPressRight.value === 1;
               triggerPullRight.value = 0;
               buttonPressRight.value = diff < 0 ? 1 : 0;
+              rightTriggerMaxHapticFired.value = false;
+              if (!wasButtonPressed && buttonPressRight.value === 1) {
+                runOnJS(triggerButtonHaptic)();
+              }
             } else {
               triggerPullRight.value = 0;
               buttonPressRight.value = 0;
+              rightTriggerMaxHapticFired.value = false;
             }
           }
         } else if (
@@ -837,32 +939,40 @@ export default function Index() {
           !isInside(touch, faceButtons.center, 0)
         ) {
           //facepad logic
+          const previousFaceButton = activeFaceButton.value;
+          let nextFaceButton = null;
           if (isInside(touch, faceButtons.x)) {
-            activeFaceButton.value = 'x';
+            nextFaceButton = 'x';
           } else if (isInside(touch, faceButtons.y)) {
-            activeFaceButton.value = 'y';
+            nextFaceButton = 'y';
           } else if (isInside(touch, faceButtons.a)) {
-            activeFaceButton.value = 'a';
+            nextFaceButton = 'a';
           } else if (isInside(touch, faceButtons.b)) {
-            activeFaceButton.value = 'b';
-          } else {
-            activeFaceButton.value = null;
+            nextFaceButton = 'b';
+          }
+          activeFaceButton.value = nextFaceButton;
+          if (nextFaceButton !== null && previousFaceButton !== nextFaceButton) {
+            runOnJS(triggerButtonHaptic)();
           }
         } else if (
           touch.id === dPadFinger.value &&
           !isInside(touch, dPadButtons.center, 1)
         ) {
           //dPad logic
+          const previousDpadButton = activeDpadButton.value;
+          let nextDpadButton = null;
           if (isInside(touch, dPadButtons.left)) {
-            activeDpadButton.value = 'left';
+            nextDpadButton = 'left';
           } else if (isInside(touch, dPadButtons.up)) {
-            activeDpadButton.value = 'up';
+            nextDpadButton = 'up';
           } else if (isInside(touch, dPadButtons.down)) {
-            activeDpadButton.value = 'down';
+            nextDpadButton = 'down';
           } else if (isInside(touch, dPadButtons.right)) {
-            activeDpadButton.value = 'right';
-          } else {
-            activeDpadButton.value = null;
+            nextDpadButton = 'right';
+          }
+          activeDpadButton.value = nextDpadButton;
+          if (nextDpadButton !== null && previousDpadButton !== nextDpadButton) {
+            runOnJS(triggerButtonHaptic)();
           }
         }
       });
@@ -905,14 +1015,14 @@ export default function Index() {
     })
     .onTouchesUp((e, manager) => {
       // Exclude the lifted touch to ensure the icon disappears immediately
-      const activeTouches = e.allTouches.filter(
-        (t) => !e.changedTouches.some((c) => c.id === t.id)
-      );
-      debugTouches.value = activeTouches.map((t) => ({
-        id: t.id,
-        x: t.absoluteX,
-        y: t.absoluteY,
-      }));
+      // const activeTouches = e.allTouches.filter(
+      //   (t) => !e.changedTouches.some((c) => c.id === t.id)
+      // );
+      // debugTouches.value = activeTouches.map((t) => ({
+      //   id: t.id,
+      //   x: t.absoluteX,
+      //   y: t.absoluteY,
+      // }));
 
       // If a finger lifts, we figure out which one it was based on location
       // and reset that specific trigger
@@ -920,6 +1030,7 @@ export default function Index() {
         if (touch.id == leftFinger.value) {
           triggerPullLeft.value = 0; //shall withSpring() be used to mimic actual trigger on a controller ?
           buttonPressLeft.value = 0;
+          leftTriggerMaxHapticFired.value = false;
           leftShoulderMode.value = null;
           leftFinger.value = -1;
 
@@ -929,6 +1040,7 @@ export default function Index() {
         } else if (touch.id == rightFinger.value) {
           triggerPullRight.value = 0; //shall withSpring() be used to mimic actual button on a controller ?
           buttonPressRight.value = 0;
+          rightTriggerMaxHapticFired.value = false;
           rightShoulderMode.value = null;
           rightFinger.value = -1;
 
@@ -1056,14 +1168,14 @@ export default function Index() {
     })
     .onTouchesCancelled((e, manager) => {
       // Ensure the touch icon disappears if the system cancels the gesture
-      const activeTouches = e.allTouches.filter(
-        (t) => !e.changedTouches.some((c) => c.id === t.id)
-      );
-      debugTouches.value = activeTouches.map((t) => ({
-        id: t.id,
-        x: t.absoluteX,
-        y: t.absoluteY,
-      }));
+      // const activeTouches = e.allTouches.filter(
+      //   (t) => !e.changedTouches.some((c) => c.id === t.id)
+      // );
+      // debugTouches.value = activeTouches.map((t) => ({
+      //   id: t.id,
+      //   x: t.absoluteX,
+      //   y: t.absoluteY,
+      // }));
     });
 
   const rightDisappearingJoystick = useAnimatedStyle(() => {
@@ -1262,7 +1374,6 @@ export default function Index() {
 
   const gamepadTester = 'https://hardwaretester.com/gamepad';
 
-  const [gamepadToggled, setGamepadToggled] = useState(false);
   const [uri, setUri] = useState(websiteUrl || gamepadTester);
 
   // Temporary measure to clean gamepad-tester.net
@@ -1412,7 +1523,53 @@ export default function Index() {
     position: 'absolute',
   }));
 
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isWideLayout = width > WIDE_SCREEN_WIDTH;
+  const horizontalScale = width / WIDE_SCREEN_WIDTH;
+  const widthScaledValue = (size) =>
+    size * horizontalScale * WIDE_CENTER_BUTTONS_GAP_SCALE;
+  const centerClusterWidth = isWideLayout
+    ? Math.max(scale(360), width * WIDE_CENTER_CLUSTER_WIDTH_RATIO)
+    : scale(360);
+  const centerButtonsGapBase = RAYS_CENTER_BUTTONS_GAP;
+  // Old mode-specific start/view positioning:
+  // Cross mode used a tighter 300 gap while rays used a wider 500 gap.
+  // That made the start/view buttons jump between alignment modes.
+  // const centerButtonsGapBase =
+  //   buttonAlignmentSetting === 'rays'
+  //     ? RAYS_CENTER_BUTTONS_GAP
+  //     : CROSS_CENTER_BUTTONS_GAP;
+  const centerButtonsGap = isWideLayout
+    ? Math.max(scale(centerButtonsGapBase), widthScaledValue(centerButtonsGapBase))
+    : scale(centerButtonsGapBase);
+  const upperContainerFlexForLayout =
+    height < SMALL_SCREEN_HEIGHT
+      ? SMALL_SCREEN_UPPER_FLEX
+      : height > LARGE_SCREEN_HEIGHT
+        ? LARGE_SCREEN_UPPER_FLEX
+        : NORMAL_SCREEN_UPPER_FLEX;
+  const lowerContainerFlexForLayout =
+    height < SMALL_SCREEN_HEIGHT
+      ? SMALL_SCREEN_LOWER_FLEX
+      : height > LARGE_SCREEN_HEIGHT
+        ? LARGE_SCREEN_LOWER_FLEX
+        : NORMAL_SCREEN_LOWER_FLEX;
+  // Start/view buttons live inside the lower container, but this file does not
+  // give that container an explicit height. Its height is created by the flex
+  // split between upperContainer and lowerContainer. Recreate that same split
+  // here so the start/view vertical offset follows the actual lower area.
+  const lowerContainerHeightForLayout =
+    (height * lowerContainerFlexForLayout) /
+    (upperContainerFlexForLayout + lowerContainerFlexForLayout);
+  // Center the start/view row within the computed lower-container height, then
+  // clamp it so the row cannot be pushed below the lower container on short
+  // landscape screens or after tweaking the flex constants above.
+  const centerButtonsMarginTop = Math.max(
+    0,
+    Math.min(
+      lowerContainerHeightForLayout / 2 - MENU_BUTTON_SIZE / 2,
+      lowerContainerHeightForLayout - MENU_BUTTON_SIZE - scale(8)
+    )
+  );
   const raysButtonClusterTranslateStyle = {
     transform: [{ translateY: buttonAlignmentSetting === 'rays' ? scale(40) : 0 }],
   };
@@ -1550,7 +1707,7 @@ export default function Index() {
             }}
           >
             {/* upper half of the screen that contains triggers */}
-            <View style={[styles.upperContainer]}>
+            <View style={[styles.upperContainer, { flex: upperContainerFlexForLayout }]}>
               {/* left trigger */}
               <Trigger
                 trigger={leftTrigger}
@@ -1579,7 +1736,7 @@ export default function Index() {
             </View>
             {/* lower half of the screen that contains buttons and joysticks */}
 
-            <View style={styles.lowerContainer}>
+            <View style={[styles.lowerContainer, { flex: lowerContainerFlexForLayout }]}>
               <Animated.View
                 style={[styles.r3l3, leftDisappearingCluster, leftDisappearingJoystick]}
               >
@@ -1635,6 +1792,7 @@ export default function Index() {
                   style={[
                     styles.centerCluster,
                     {
+                      width: centerClusterWidth,
                       alignItems:
                         buttonAlignmentSetting === 'rays' ? 'flex-end' : 'center',
                     },
@@ -1661,12 +1819,9 @@ export default function Index() {
                         justifyContent: 'center',
                         alignItems: 'flex-start',
                         alignSelf: 'flex-start',
-                        gap: scale(buttonAlignmentSetting === 'rays' ? 500 : 300),
+                        gap: centerButtonsGap,
                         flex: 1,
-                        marginTop: Math.min(
-                          height * 0.325 - MENU_BUTTON_SIZE,
-                          height / 4.4 + 50 - MENU_BUTTON_SIZE - scale(10)
-                        ), // Clamps the margin so buttons never go below the bottom edge of the screen
+                        marginTop: centerButtonsMarginTop,
                         // borderColor: 'black',
                         // borderWidth: 2,
                         // maginBottom: 180,
@@ -1800,6 +1955,8 @@ export default function Index() {
       <Modal
         visible={settingsVisible}
         transparent
+        statusBarTranslucent
+        navigationBarTranslucent
         animationType="fade"
         onRequestClose={() => setSettingsVisible(false)}
         // Required for iOS: Prevents the app from forcibly rotating back to portrait mode
@@ -1812,154 +1969,169 @@ export default function Index() {
         ]}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+          <View style={[styles.modalContainer, { maxHeight: height * 0.9 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Settings</Text>
               <Pressable onPress={() => setSettingsVisible(false)}>
-                <Ionicons name="close" size={24} color="#1C212A" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </Pressable>
             </View>
 
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Right Stick Mode</Text>
-              <View style={styles.segmentedControl}>
-                <Pressable
-                  style={[styles.segmentButton, trackpadMode && styles.segmentActive]}
-                  onPress={() => {
-                    setTrackpadMode(true);
-                    trackpadModeSV.value = true;
-                  }}
-                >
-                  <Text
-                    style={[styles.segmentText, trackpadMode && styles.segmentTextActive]}
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="white"
+              persistentScrollbar={true}
+            >
+              <View style={styles.settingRow}>
+                <Text style={styles.settingLabel}>Right Stick Mode</Text>
+                <View style={styles.segmentedControl}>
+                  <Pressable
+                    style={[styles.segmentButton, trackpadMode && styles.segmentActive]}
+                    onPress={() => {
+                      setTrackpadMode(true);
+                      trackpadModeSV.value = true;
+                    }}
                   >
-                    Swiping
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.segmentButton, !trackpadMode && styles.segmentActive]}
-                  onPress={() => {
-                    setTrackpadMode(false);
-                    trackpadModeSV.value = false;
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      !trackpadMode && styles.segmentTextActive,
-                    ]}
-                  >
-                    Joystick
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>D-pad / ABXY Alignment</Text>
-              <View style={styles.segmentedControl}>
-                <Pressable
-                  style={[
-                    styles.segmentButton,
-                    buttonAlignmentSetting === 'rays' && styles.segmentActive,
-                  ]}
-                  onPress={() => {
-                    setButtonAlignmentSetting('rays');
-                    buttonAlignment.value = 'rays';
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      buttonAlignmentSetting === 'rays' && styles.segmentTextActive,
-                    ]}
-                  >
-                    Rays
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.segmentButton,
-                    buttonAlignmentSetting === 'cross' && styles.segmentActive,
-                  ]}
-                  onPress={() => {
-                    setButtonAlignmentSetting('cross');
-                    buttonAlignment.value = 'cross';
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      buttonAlignmentSetting === 'cross' && styles.segmentTextActive,
-                    ]}
-                  >
-                    Cross
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {trackpadMode && (
-              <>
-                <View style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>Sensitivity</Text>
-                  <View style={styles.stepperControl}>
-                    <Pressable
-                      style={styles.stepperButton}
-                      onPress={() => {
-                        const newSens = Math.max(0, sensitivity - 1);
-                        setSensitivity(newSens);
-                        sensitivitySV.value = newSens;
-                      }}
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        trackpadMode && styles.segmentTextActive,
+                      ]}
                     >
-                      <Ionicons name="remove" size={20} color="#1C212A" />
-                    </Pressable>
-                    <Text style={styles.stepperValue}>{sensitivity}</Text>
-                    <Pressable
-                      style={styles.stepperButton}
-                      onPress={() => {
-                        const newSens = Math.min(sensitivityMax, sensitivity + 1);
-                        setSensitivity(newSens);
-                        sensitivitySV.value = newSens;
-                      }}
+                      Swiping
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.segmentButton, !trackpadMode && styles.segmentActive]}
+                    onPress={() => {
+                      setTrackpadMode(false);
+                      trackpadModeSV.value = false;
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        !trackpadMode && styles.segmentTextActive,
+                      ]}
                     >
-                      <Ionicons name="add" size={20} color="#1C212A" />
-                    </Pressable>
-                  </View>
+                      Joystick
+                    </Text>
+                  </Pressable>
                 </View>
+              </View>
 
-                <View style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>Mode</Text>
-                  <View style={styles.segmentedControl}>
-                    {Object.keys(GAIN_PROFILES).map((profileKey) => {
-                      const profileValue = GAIN_PROFILES[profileKey];
-                      const isActive = gain === profileValue;
-                      return (
-                        <Pressable
-                          key={profileKey}
-                          style={[styles.segmentButton, isActive && styles.segmentActive]}
-                          onPress={() => {
-                            setGain(profileValue);
-                            gainSV.value = profileValue;
-                          }}
-                        >
-                          <Text
+              <View style={styles.settingRow}>
+                <Text style={styles.settingLabel}>D-pad / ABXY Alignment</Text>
+                <View style={styles.segmentedControl}>
+                  <Pressable
+                    style={[
+                      styles.segmentButton,
+                      buttonAlignmentSetting === 'rays' && styles.segmentActive,
+                    ]}
+                    onPress={() => {
+                      setButtonAlignmentSetting('rays');
+                      buttonAlignment.value = 'rays';
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        buttonAlignmentSetting === 'rays' && styles.segmentTextActive,
+                      ]}
+                    >
+                      Rays
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.segmentButton,
+                      buttonAlignmentSetting === 'cross' && styles.segmentActive,
+                    ]}
+                    onPress={() => {
+                      setButtonAlignmentSetting('cross');
+                      buttonAlignment.value = 'cross';
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        buttonAlignmentSetting === 'cross' && styles.segmentTextActive,
+                      ]}
+                    >
+                      Cross
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {trackpadMode && (
+                <>
+                  <View style={styles.settingRow}>
+                    <Text style={styles.settingLabel}>Sensitivity</Text>
+                    <View style={styles.stepperControl}>
+                      <Pressable
+                        style={styles.stepperButton}
+                        onPress={() => {
+                          const newSens = Math.max(0, sensitivity - 1);
+                          setSensitivity(newSens);
+                          sensitivitySV.value = newSens;
+                        }}
+                      >
+                        <Ionicons name="remove" size={20} color={colors.text} />
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{sensitivity}</Text>
+                      <Pressable
+                        style={styles.stepperButton}
+                        onPress={() => {
+                          const newSens = Math.min(sensitivityMax, sensitivity + 1);
+                          setSensitivity(newSens);
+                          sensitivitySV.value = newSens;
+                        }}
+                      >
+                        <Ionicons name="add" size={20} color={colors.text} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={styles.settingRow}>
+                    <Text style={styles.settingLabel}>Mode</Text>
+                    <View style={styles.segmentedControl}>
+                      {Object.keys(GAIN_PROFILES).map((profileKey) => {
+                        const profileValue = GAIN_PROFILES[profileKey];
+                        const isActive = Number(gain) === profileValue;
+                        return (
+                          <Pressable
+                            key={profileKey}
                             style={[
-                              styles.segmentText,
-                              isActive && styles.segmentTextActive,
+                              styles.segmentButton,
+                              isActive && styles.segmentActive,
                             ]}
+                            onPress={() => {
+                              setGain(profileValue);
+                              gainSV.value = profileValue;
+                            }}
                           >
-                            {profileKey === 'fps'
-                              ? 'FPS'
-                              : profileKey.charAt(0).toUpperCase() + profileKey.slice(1)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                            <Text
+                              style={[
+                                styles.segmentText,
+                                isActive && styles.segmentTextActive,
+                              ]}
+                            >
+                              {profileKey === 'fps'
+                                ? 'FPS'
+                                : profileKey.charAt(0).toUpperCase() +
+                                  profileKey.slice(1)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </View>
-                </View>
-              </>
-            )}
+                </>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1982,7 +2154,8 @@ export default function Index() {
 const styles = StyleSheet.create({
   upperContainer: {
     flexDirection: 'row',
-    flex: 1.2,
+    // borderWidth: 5,
+    // borderColor: 'green',
   },
   upperInnerContainer: {
     flex: 1,
@@ -1993,12 +2166,13 @@ const styles = StyleSheet.create({
     // backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   lowerContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 40,
     // maxHeight: 250,
+    // borderWidth: 5,
+    // borderColor: 'red',
   },
 
   centerCluster: {
@@ -2101,15 +2275,24 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
     width: 260,
-    backgroundColor: 'rgba(194, 194, 194, 0.95)',
+    backgroundColor: colors.background,
     borderRadius: 20,
     padding: 16,
+  },
+  modalScroll: {
+    flexShrink: 1,
+    marginRight: -8,
+    paddingRight: 8,
+  },
+  modalScrollContent: {
+    paddingBottom: 2,
+    paddingRight: 10,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2118,7 +2301,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    color: '#1C212A',
+    color: colors.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -2126,14 +2309,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   settingLabel: {
-    color: '#444444',
+    color: colors.text,
     fontSize: 13,
     marginBottom: 8,
     fontWeight: '600',
   },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     padding: 4,
   },
@@ -2144,7 +2327,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segmentActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.accent,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -2152,18 +2335,18 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   segmentText: {
-    color: '#666',
+    color: colors.text,
     fontWeight: '600',
     fontSize: 11,
   },
   segmentTextActive: {
-    color: '#1C212A',
+    color: colors.background,
   },
   stepperControl: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -2172,7 +2355,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   stepperValue: {
-    color: '#1C212A',
+    color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
   },

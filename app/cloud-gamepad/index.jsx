@@ -1,7 +1,6 @@
 import colors from '@/assets/images/colors';
 import NewUrlModal from '@/components/NewUrlModal';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -111,14 +110,6 @@ export default function CloudGamepadScreen() {
 
   return (
     <View style={styles.container}>
-      <MaterialIcons
-        name="arrow-back-ios-new"
-        size={22}
-        color={colors.text}
-        style={styles.backButton}
-        onPress={() => router.back()}
-      />
-
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* <Text style={styles.title}>WEB GAMEPAD</Text> */}
 
@@ -227,12 +218,6 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  backButton: {
-    left: 28,
-    position: 'absolute',
-    top: 52,
-    zIndex: 10,
   },
   scrollContainer: {
     alignItems: 'center',

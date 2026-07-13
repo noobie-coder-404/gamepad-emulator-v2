@@ -3,19 +3,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Dimensions,
   FlatList,
   Image,
   Modal,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MODAL_WIDTH = Math.min(SCREEN_WIDTH * 0.8, 1000);
-const MODAL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.9, 800);
 
 // 🚨 Replace these with the actual filenames from your "onboarding illustrations" folder
 const ILLUSTRATIONS = [
@@ -58,13 +54,13 @@ const ILLUSTRATIONS = [
   {
     id: '7',
     type: 'video',
-    title: 'Using the D-Pad',
+    title: 'Using ABXY Buttons',
     source: require('@/assets/onboarding-illustrations/7-abxy.mp4'),
   },
   {
     id: '8',
     type: 'video',
-    title: 'Using ABXY Buttons',
+    title: 'Using the D-Pad',
     source: require('@/assets/onboarding-illustrations/8-dpad.mp4'),
   },
 ];
@@ -96,6 +92,9 @@ function VideoSlide({ source, shouldPlay, style }) {
 export default function OnboardingModal({ visible, onClose }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+  const { width, height } = useWindowDimensions();
+  const modalWidth = Math.min(width * 0.8, 1000);
+  const modalHeight = Math.min(height * 0.9, 800);
 
   const handleNext = () => {
     if (currentIndex < ILLUSTRATIONS.length - 1) {
@@ -119,7 +118,7 @@ export default function OnboardingModal({ visible, onClose }) {
 
   const renderItem = ({ item }) => {
     return (
-      <View style={[styles.slide, { width: MODAL_WIDTH }]}>
+      <View style={[styles.slide, { width: modalWidth }]}>
         {item.type === 'video' ? (
           <VideoSlide
             source={item.source}
@@ -141,6 +140,8 @@ export default function OnboardingModal({ visible, onClose }) {
     <Modal
       visible={visible}
       transparent
+      statusBarTranslucent
+      navigationBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
       supportedOrientations={[
@@ -151,7 +152,7 @@ export default function OnboardingModal({ visible, onClose }) {
       ]}
     >
       <View style={styles.overlay}>
-        <View style={[styles.container, { width: MODAL_WIDTH, height: MODAL_HEIGHT }]}>
+        <View style={[styles.container, { width: modalWidth, height: modalHeight }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>{ILLUSTRATIONS[currentIndex].title}</Text>
@@ -169,6 +170,7 @@ export default function OnboardingModal({ visible, onClose }) {
               renderItem={renderItem}
               horizontal
               pagingEnabled
+              extraData={modalWidth}
               showsHorizontalScrollIndicator={false}
               onViewableItemsChanged={onViewableItemsChanged}
               viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
